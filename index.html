@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pod240</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="metadata-modal-host"></div>
+    <div id="app-menu-modal-host"></div>
+    <div id="busy-overlay" class="busy-overlay" hidden aria-live="polite">
+      <div class="busy-panel">
+        <div class="busy-spinner" aria-hidden="true"></div>
+        <p id="busy-message" class="busy-message">Working…</p>
+        <progress id="busy-progress" class="busy-progress"></progress>
+        <p id="busy-count" class="busy-count" hidden>0 / 0</p>
+        <button type="button" id="busy-cancel-audio" class="secondary busy-cancel-audio" hidden>
+          Cancel
+        </button>
+      </div>
+    </div>
+    <div id="app">
+      <header>
+        <h1>Pod240</h1>
+        <p class="tagline">
+          iPod Classic / Video —
+          <a
+            class="tagline-link"
+            href="https://github.com/Olsro"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Olsro 240p30 Preset</a
+          >
+        </p>
+      </header>
+
+      <section class="dropzone" id="dropzone" tabindex="0">
+        <p>Drop Video Files or Folders Here</p>
+        <button type="button" id="btn-files">Select…</button>
+      </section>
+
+      <section class="output-row">
+        <label>Output Folder</label>
+        <div class="output-controls">
+          <span id="output-label" class="output-path">Same as Source File</span>
+          <button type="button" id="btn-output">Select…</button>
+          <button type="button" id="btn-output-clear" class="secondary" title="Use source folder">Clear</button>
+        </div>
+      </section>
+
+      <section id="queue-section" class="queue-section queue-section--empty" aria-labelledby="queue-heading-title">
+        <div class="queue-panel">
+          <div class="queue-header">
+            <div class="queue-heading-block">
+              <h2 id="queue-heading-title">Queue</h2>
+              <p id="queue-meta" class="queue-meta" hidden></p>
+            </div>
+            <div class="queue-actions">
+              <button type="button" id="btn-clear-queue" class="secondary" disabled>
+                Clear Queue
+              </button>
+              <button type="button" id="btn-cancel" disabled>Cancel Current</button>
+            </div>
+          </div>
+          <ul id="queue-list" class="queue-list" role="list"></ul>
+        </div>
+      </section>
+
+      <details class="log-details" id="log-details">
+        <summary>Log</summary>
+        <pre id="log"></pre>
+      </details>
+
+      <p class="hb-warning" id="hb-warning" hidden></p>
+      <p class="hb-warning" id="ap-warning" hidden></p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+node_modules
+dist
+src-tauri/target
+src-tauri/gen
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+.idea/
+*.swp
+pod240-settings.json
+
+# Vendored HandBrake / AtomicParsley (CI runs `npm run vendor:release`; do not commit binaries)
+src-tauri/resources/handbrake/*
+!src-tauri/resources/handbrake/README.txt
+src-tauri/resources/atomicparsley/*
+!src-tauri/resources/atomicparsley/README.txt

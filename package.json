@@ -1,0 +1,24 @@
+{
+  "name": "pod240",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "node scripts/run-tauri-dev.mjs",
+    "tauri:icons": "python scripts/fix-icon-transparency.py && cd src-tauri && npx tauri icon pod240-icon-1024.png",
+    "vendor:release": "node scripts/vendor-release-assets.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.0"
+  }
+}

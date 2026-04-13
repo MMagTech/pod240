@@ -1,0 +1,8 @@
+{
+  "handbrakeVersion": "1.11.1",
+  "atomicParsley": {
+    "tag": "20240608.083822.1ed9031",
+    "windowsZip": "AtomicParsleyWindows.zip",
+    "macZip": "AtomicParsleyMacOS.zip"
+  }
+}
