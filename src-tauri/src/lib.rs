@@ -1,5 +1,6 @@
 mod audio_probe;
 mod embedded_artwork;
+mod subtitle_sidecar;
 mod tagging;
 
 use std::cell::Cell;
@@ -39,6 +40,9 @@ struct Job {
     /// HandBrake 1-based audio source track (`-a`). `None` = HandBrake default (first track).
     #[serde(skip_serializing_if = "Option::is_none")]
     audio_track: Option<u32>,
+    /// Absolute path to a `.srt` file burned into the picture (`--srt-file`, `--srt-burn`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subtitle_burn_path: Option<String>,
     status: JobStatus,
     progress: Option<f32>,
     error: Option<String>,
@@ -107,6 +111,14 @@ fn save_settings(settings: &Settings) -> Result<(), String> {
 /// In **debug** (`tauri dev`), prefer `src-tauri/resources` so files you drop there are found
 /// immediately. `resource_dir()` points at `target/debug/resources`, which may lag or miss files
 /// until a full rebuild.
+///
+/// **Release (Windows installer / portable):** Tauri’s `resource_dir()` is the folder next to the
+/// exe (e.g. `Pod240\`), while `tauri.conf.json` bundle resources are unpacked under
+/// `Pod240\resources\` (`handbrake/`, `atomicparsley/`, `presets/`). We detect that layout and use
+/// the nested `resources` directory so self-contained builds resolve correctly.
+///
+/// **macOS:** Bundled extras often live directly under `…/Resources/`; if `handbrake/` exists there,
+/// we keep using `resource_dir()` as-is.
 pub(crate) fn resources_root(app: &AppHandle) -> Result<PathBuf, String> {
     #[cfg(debug_assertions)]
     {
@@ -115,9 +127,84 @@ pub(crate) fn resources_root(app: &AppHandle) -> Result<PathBuf, String> {
             return Ok(dev);
         }
     }
-    app.path()
+    let base = app
+        .path()
         .resource_dir()
-        .map_err(|e| format!("resource_dir: {e}"))
+        .map_err(|e| format!("resource_dir: {e}"))?;
+
+    if base.join("handbrake").is_dir() || base.join("presets").is_dir() {
+        return Ok(base);
+    }
+
+    let nested = base.join("resources");
+    if nested.is_dir()
+        && (nested.join("handbrake").is_dir()
+            || nested.join("atomicparsley").is_dir()
+            || nested.join("presets").is_dir())
+    {
+        return Ok(nested);
+    }
+
+    Ok(base)
+}
+
+/// Runs `exe --version`; merges stdout and stderr (HandBrake logs to stderr, prints `HandBrake x.y` on stdout).
+fn read_cli_version_output(exe: &Path, cwd: Option<&Path>) -> Option<String> {
+    let mut cmd = Command::new(exe);
+    cmd.arg("--version");
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    let out = cmd.output().ok()?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    Some(format!("{stdout}{stderr}"))
+}
+
+fn pick_handbrake_version_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("HandBrake "))
+        .map(str::to_string)
+}
+
+fn pick_atomicparsley_version_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|l| {
+            !l.is_empty()
+                && (l.contains("AtomicParsley") || l.to_lowercase().contains("atomicparsley"))
+        })
+        .map(str::to_string)
+        .or_else(|| {
+            text
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .map(str::to_string)
+        })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolVersions {
+    handbrake_cli: Option<String>,
+    atomic_parsley: Option<String>,
+}
+
+/// Runtime `--version` strings for the bundled HandBrake CLI and AtomicParsley (About dialog).
+#[tauri::command]
+fn get_tool_versions(app: AppHandle) -> Result<ToolVersions, String> {
+    let handbrake_cli = handbrake_cli_and_workdir(&app).ok().and_then(|(exe, wd)| {
+        read_cli_version_output(&exe, Some(wd.as_path())).and_then(|t| pick_handbrake_version_line(&t))
+    });
+    let atomic_parsley = tagging::find_atomicparsley_executable(&app).ok().and_then(|exe| {
+        read_cli_version_output(&exe, exe.parent()).and_then(|t| pick_atomicparsley_version_line(&t))
+    });
+    Ok(ToolVersions {
+        handbrake_cli,
+        atomic_parsley,
+    })
 }
 
 /// Looks for `HandBrakeCLI.exe` (exact) or any `*HandBrakeCLI*.exe` in the folder (Windows).
@@ -414,6 +501,41 @@ fn expand_input_paths(paths: Vec<String>) -> Result<Vec<EnqueuedVideo>, String> 
     Ok(flat)
 }
 
+/// Best-effort same-folder `.srt` for HandBrake burn-in; `None` if not found or path cannot be resolved.
+fn resolved_subtitle_burn_path(video: &Path) -> Option<String> {
+    let p = subtitle_sidecar::detect_sidecar_srt(video)?;
+    let abs = p.canonicalize().unwrap_or(p);
+    if subtitle_sidecar::is_srt_file(&abs) {
+        Some(abs.to_string_lossy().to_string())
+    } else {
+        None
+    }
+}
+
+fn normalize_subtitle_burn_path(path: Option<&str>) -> Option<String> {
+    let s = path?.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let pb = PathBuf::from(s);
+    if !subtitle_sidecar::is_srt_file(&pb) {
+        return None;
+    }
+    pb.canonicalize()
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
+        .or_else(|| Some(s.to_string()))
+}
+
+#[tauri::command]
+fn probe_sidecar_subtitle(source_path: String) -> Result<Option<String>, String> {
+    let p = PathBuf::from(source_path.trim());
+    if !p.is_file() {
+        return Err("Not a file.".into());
+    }
+    Ok(resolved_subtitle_burn_path(p.as_path()))
+}
+
 fn emit_queue(app: &AppHandle, state: &AppState) -> Result<(), String> {
     let jobs: Vec<Job> = state.0.lock().map_err(|e| e.to_string())?.jobs.clone();
     app.emit("queue-changed", jobs).map_err(|e| e.to_string())
@@ -496,6 +618,9 @@ struct EnqueueTaggedItem {
     tags: EmbeddableTags,
     #[serde(default)]
     audio_track: Option<u32>,
+    /// Burn-in `.srt` path from metadata wizard (optional).
+    #[serde(default)]
+    subtitle_burn_path: Option<String>,
 }
 
 #[tauri::command]
@@ -538,12 +663,14 @@ fn enqueue_with_tags(
                 EmbeddableTags::Skip => None,
                 t => Some(t.clone()),
             };
+            let subtitle_burn_path = normalize_subtitle_burn_path(item.subtitle_burn_path.as_deref());
             g.jobs.push(Job {
                 id: uuid::Uuid::new_v4().to_string(),
                 source_path: item.source_path,
                 tree_root: item.tree_root,
                 tags,
                 audio_track: item.audio_track,
+                subtitle_burn_path,
                 status: JobStatus::Pending,
                 progress: None,
                 error: None,
@@ -558,6 +685,39 @@ fn enqueue_with_tags(
         added,
         skipped_duplicates: skipped,
     })
+}
+
+#[tauri::command]
+fn set_job_subtitle_burn_path(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    job_id: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    {
+        let mut g = state.0.lock().map_err(|e| e.to_string())?;
+        let job = g
+            .jobs
+            .iter_mut()
+            .find(|j| j.id == job_id)
+            .ok_or_else(|| "Job not found".to_string())?;
+        if !matches!(job.status, JobStatus::Pending) {
+            return Err("Only pending jobs can change subtitles.".into());
+        }
+        match path {
+            None => job.subtitle_burn_path = None,
+            Some(s) => {
+                let p = PathBuf::from(s.trim());
+                if !subtitle_sidecar::is_srt_file(&p) {
+                    return Err("Choose an existing .srt file.".into());
+                }
+                let abs = p.canonicalize().map_err(|e| e.to_string())?;
+                job.subtitle_burn_path = Some(abs.to_string_lossy().to_string());
+            }
+        }
+    }
+    emit_queue(&app, state.deref())?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -734,6 +894,7 @@ fn enqueue(app: AppHandle, state: State<'_, AppState>, req: EnqueueRequest) -> R
                 tree_root: item.tree_root,
                 tags: None,
                 audio_track,
+                subtitle_burn_path: None,
                 status: JobStatus::Pending,
                 progress: None,
                 error: None,
@@ -943,6 +1104,20 @@ fn run_one_job(app: AppHandle, state: AppState, job: Job, default_out: Option<Pa
                 cmd.arg("-a").arg(format!("{a}"));
             }
         }
+        if let Some(ref srt) = job.subtitle_burn_path {
+            let sp = Path::new(srt);
+            if !subtitle_sidecar::is_srt_file(sp) {
+                return Err(format!(
+                    "Subtitle file missing or not .srt: {}",
+                    sp.display()
+                ));
+            }
+            cmd.arg("--srt-file")
+                .arg(sp.as_os_str())
+                .arg("--srt-codeset")
+                .arg("UTF-8")
+                .arg("--srt-burn");
+        }
         // Preset asks for stereo, but 5.1 sources can still encode as multichannel AAC; iPod won't play that.
         // Explicit mixdown matches Olsro intent and avoids silent playback on device.
         cmd.arg("--mixdown").arg("stereo");
@@ -1054,6 +1229,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             probe_handbrake,
             probe_atomicparsley,
+            get_tool_versions,
             probe_embedded_artwork,
             strip_embedded_artwork_from_file,
             get_queue,
@@ -1062,8 +1238,10 @@ pub fn run() {
             set_tmdb_api_key,
             analyze_inputs,
             probe_source_audio,
+            probe_sidecar_subtitle,
             enqueue,
             enqueue_with_tags,
+            set_job_subtitle_burn_path,
             remove_job,
             reorder_queue,
             clear_pending_jobs,

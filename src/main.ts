@@ -20,6 +20,8 @@ interface Job {
   source_path: string;
   tree_root: string | null;
   audio_track?: number | null;
+  /** Absolute path to .srt burned into the encode; omitted when none. */
+  subtitle_burn_path?: string | null;
   status: JobStatus;
   progress: number | null;
   error: string | null;
@@ -122,6 +124,11 @@ function appendLog(line: string) {
   logDetails.open = true;
 }
 
+function subtitleBasename(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/");
+  return parts[parts.length - 1] ?? path;
+}
+
 function queueItemLabel(job: Job): string {
   if (job.tree_root) {
     const root = job.tree_root.replace(/[/\\]+$/, "").replace(/\\/g, "/");
@@ -170,6 +177,9 @@ function renderQueue() {
       drag.classList.add("queue-drag--inactive");
     }
 
+    const main = document.createElement("div");
+    main.className = "queue-item-main";
+
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = queueItemLabel(job);
@@ -177,6 +187,66 @@ function renderQueue() {
     if (job.audio_track != null && job.audio_track >= 1) {
       name.title += `\nAudio track: ${job.audio_track}`;
     }
+    if (job.subtitle_burn_path) {
+      name.title += `\nBurn-in subtitles: ${job.subtitle_burn_path}`;
+    }
+
+    main.appendChild(name);
+
+    if (job.status === "pending") {
+      const sub = document.createElement("div");
+      sub.className = "queue-sub";
+      const meta = document.createElement("span");
+      meta.className = "queue-sub-meta";
+      if (job.subtitle_burn_path) {
+        meta.textContent = `Burn-in: ${subtitleBasename(job.subtitle_burn_path)}`;
+      } else {
+        meta.textContent = "No .srt selected (optional)";
+      }
+      const btnRow = document.createElement("span");
+      btnRow.className = "queue-sub-actions";
+      const pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "queue-sub-btn secondary";
+      pick.textContent = "SRT…";
+      pick.title = "Choose a SubRip file to burn into the video";
+      pick.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        void (async () => {
+          const selected = await open({
+            multiple: false,
+            filters: [{ name: "Subtitles", extensions: ["srt"] }],
+          });
+          if (typeof selected !== "string" || !selected) return;
+          try {
+            await invoke("set_job_subtitle_burn_path", {
+              jobId: job.id,
+              path: selected,
+            });
+          } catch (e) {
+            appendLog(String(e));
+          }
+        })();
+      });
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "queue-sub-btn secondary";
+      clear.textContent = "Clear";
+      clear.disabled = !job.subtitle_burn_path;
+      clear.title = "Remove burned-in subtitle for this job";
+      clear.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        invoke("set_job_subtitle_burn_path", { jobId: job.id, path: null }).catch((e) =>
+          appendLog(String(e))
+        );
+      });
+      btnRow.appendChild(pick);
+      btnRow.appendChild(clear);
+      sub.appendChild(meta);
+      sub.appendChild(btnRow);
+      main.appendChild(sub);
+    }
+
 
     const status = document.createElement("span");
     status.className = `status ${job.status}`;
@@ -187,7 +257,7 @@ function renderQueue() {
     }
 
     li.appendChild(drag);
-    li.appendChild(name);
+    li.appendChild(main);
     li.appendChild(status);
 
     if (job.status === "pending") {
@@ -370,7 +440,7 @@ btnCancel.addEventListener("click", () => {
 
 void (async () => {
   setupDropzone();
-  await setupAppMenu(appendLog);
+  setupAppMenu(appendLog);
 
   listen<Job[]>("queue-changed", (e) => {
     jobs = e.payload;

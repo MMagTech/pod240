@@ -21,18 +21,52 @@
       </div>
     </div>
     <div id="app">
-      <header>
-        <h1>Pod240</h1>
-        <p class="tagline">
-          iPod Classic / Video —
-          <a
-            class="tagline-link"
-            href="https://github.com/Olsro"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Olsro 240p30 Preset</a
+      <header class="app-header">
+        <div class="app-header-main">
+          <h1>Pod240</h1>
+          <p class="tagline">
+            iPod Classic / Video —
+            <a
+              class="tagline-link"
+              href="https://github.com/Olsro"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Olsro 240p30 Preset</a
+            >
+          </p>
+        </div>
+        <div class="app-menu-wrap" id="app-menu-wrap">
+          <button
+            type="button"
+            id="btn-app-menu"
+            class="secondary app-menu-trigger"
+            aria-expanded="false"
+            aria-haspopup="true"
+            aria-controls="app-menu-dropdown"
           >
-        </p>
+            Menu…
+          </button>
+          <div
+            id="app-menu-dropdown"
+            class="app-menu-dropdown"
+            role="menu"
+            aria-labelledby="btn-app-menu"
+            hidden
+          >
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-tmdb">
+              Add TMDB API Key
+            </button>
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-tag-ref">
+              Tag Reference
+            </button>
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-help">
+              Help
+            </button>
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-about">
+              About
+            </button>
+          </div>
+        </div>
       </header>
 
       <section class="dropzone" id="dropzone" tabindex="0">

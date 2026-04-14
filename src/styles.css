@@ -171,6 +171,90 @@ body {
   margin-top: 0.85rem;
 }
 
+/* In-app menu: header row; trigger is plain secondary button; panel opens below */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.app-header-main {
+  flex: 1;
+  min-width: min(100%, 12rem);
+}
+
+.app-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+button.app-menu-trigger {
+  min-height: 2.125rem;
+  padding: 0 0.85rem;
+  font-size: var(--font-ui-sm);
+  font-weight: 600;
+}
+
+.app-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  bottom: auto;
+  right: 0;
+  z-index: 60;
+  min-width: 12.5rem;
+  padding: 0.35rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.app-menu-dropdown[hidden] {
+  display: none;
+}
+
+.app-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  text-align: left;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--font-ui-sm);
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.app-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface-elevated));
+  color: var(--text);
+  filter: none;
+}
+
+.app-menu-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.app-menu-item:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 32%, var(--surface-elevated));
+  filter: brightness(0.98);
+}
+
 .app-menu-dialog {
   width: min(100%, 480px);
 }
@@ -346,6 +430,30 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
   line-height: 1.45;
 }
 
+.app-about-code {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, monospace;
+  font-size: 0.88em;
+  font-weight: 500;
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg) 52%, var(--surface-elevated) 48%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  color: var(--text);
+}
+
+.app-about-bundled-tools {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-elevated) 100%, var(--muted) 6%);
+  border: 1px solid var(--border);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-line;
+  word-break: break-word;
+}
+
 .app-help-body {
   max-height: min(60vh, 28rem);
   overflow-y: auto;
@@ -374,7 +482,9 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
-  align-items: flex-start;
+  /* Center in the window; `safe` avoids clipping the top of very tall dialogs when space is tight. */
+  align-items: center;
+  align-items: safe center;
   justify-content: center;
   padding: 1rem;
   overflow-y: auto;
@@ -451,6 +561,34 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
 .meta-tv-batch-panel {
   width: min(100%, 560px);
   padding: 1.5rem 1.35rem;
+}
+
+/*
+ * TV batch / unparsed dialogs put Show · Network · Genre directly under .meta-panel, not inside
+ * .meta-section, so those <label>s would use default (large) text. Match single-file metadata
+ * (.meta-section label): small muted captions above inputs.
+ */
+.meta-tv-batch-panel > .meta-row2 {
+  margin-bottom: 0.75rem;
+}
+
+.meta-tv-batch-panel > .meta-row2 label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.meta-tv-batch-panel > label:not(.meta-file-label):not(.meta-check-label) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+  min-width: 0;
 }
 
 .meta-panel h2 {
@@ -681,6 +819,15 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
   border-top: 1px solid color-mix(in srgb, var(--muted) 26%, transparent);
 }
 
+/* Subtitles collapsible (single-file metadata, directly under Optional Tags). */
+.meta-sub-details--single-file {
+  margin-top: 0.5rem;
+}
+
+.meta-optional-tags-body .meta-sub-burn-section {
+  margin-bottom: 0;
+}
+
 /* Space between TV network row and collapsible optional tags (batch / orphan modals). */
 .meta-optional-tags-details--tv-dialog {
   margin-top: 1.35rem;
@@ -816,7 +963,7 @@ details[open] > .meta-optional-tags-summary::before {
   grid-template-columns: minmax(0, 1fr) 4.5rem;
   gap: 0.5rem 0.85rem;
   align-items: start;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.75rem;
 }
 
 @media (max-width: 380px) {
@@ -1060,7 +1207,7 @@ header h1 {
 }
 
 .tagline {
-  margin: 0.35rem 0 1.25rem;
+  margin: 0.35rem 0 0;
   font-size: var(--font-ui);
   color: var(--muted);
   line-height: 1.45;
@@ -1419,14 +1566,82 @@ body.queue-reordering {
   border-bottom: none;
 }
 
-.queue-list .name {
+.queue-item-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.queue-list .queue-item-main .name {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-height: 1.35;
+  word-break: break-word;
+}
+
+.queue-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.queue-sub-meta {
+  flex: 1 1 8rem;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.queue-sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.queue-sub-btn {
+  min-height: 1.75rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.meta-sub-burn-section .meta-check-label {
+  margin-bottom: 0.35rem;
+}
+
+.meta-batch-sub {
+  vertical-align: top;
+  white-space: normal;
+  max-width: 11rem;
+}
+
+.meta-batch-sub .meta-batch-sub-check {
+  display: inline-flex;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+.meta-batch-sub .tv-batch-sub-pick,
+.meta-batch-sub .tv-orph-sub-pick {
+  display: inline-block;
+  margin-top: 0.25rem;
+  min-height: 1.65rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+.meta-batch-sub .tv-batch-sub-cap,
+.meta-batch-sub .tv-orph-sub-cap {
+  display: block;
+  margin-top: 0.15rem;
   word-break: break-word;
 }
 

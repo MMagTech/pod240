@@ -17,7 +17,7 @@ export function promptMetadataOrSkip(): Promise<MetadataGateChoice> {
     overlay.innerHTML = `
       <div class="meta-panel meta-gate-panel" role="dialog" aria-modal="true" aria-labelledby="meta-gate-title">
         <h2 id="meta-gate-title">Metadata</h2>
-        <p class="meta-hint">Add tags for iTunes / iPod (optional artwork), or skip and encode without metadata.</p>
+        <p class="meta-hint">Add iPod Compatible Tags or Skip and Encode Without Metadata.</p>
         <div class="meta-gate-actions">
           <button type="button" class="secondary" id="meta-gate-cancel">Cancel</button>
           <button type="button" class="secondary" id="meta-gate-skip">Skip</button>

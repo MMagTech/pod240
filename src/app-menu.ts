@@ -1,12 +1,27 @@
 /**
- * Native app menu and dialogs (TMDB key, Tag Reference, Help, About).
+ * In-app menu (styled to match UI) and dialogs (TMDB key, Tag Reference, Help, About).
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { Menu, MenuItem, Submenu } from "@tauri-apps/api/menu";
 import { attachConfirmedBackdropDismiss } from "./modal-backdrop";
 
 const HOST_ID = "app-menu-modal-host";
+
+/** e.g. `HandBrake 1.11.1` → `1.11.1` */
+function shortenHandBrakeVersionLabel(line: string): string {
+  const m = line.trim().match(/HandBrake\s+([\d.]+)/i);
+  return m?.[1] ?? line.trim();
+}
+
+/** Release tag only (e.g. `20240608.083822.0`), drops git hash / `(utf16)` noise. */
+function shortenAtomicParsleyVersionLabel(line: string): string {
+  const t = line.trim();
+  const labeled = t.match(/AtomicParsley\s+version:\s*(\S+)/i);
+  if (labeled) return labeled[1]!;
+  const token = t.match(/(\d{8}\.\d+(?:\.\d+)?)/);
+  if (token) return token[1]!;
+  return t.length <= 40 ? t : `${t.slice(0, 37)}…`;
+}
 
 function getHost(): HTMLElement | null {
   return document.getElementById(HOST_ID);
@@ -134,7 +149,7 @@ export function showTagReferenceDialog(): void {
         <h3 class="app-menu-tag-ref-h3">Optional Tags</h3>
         <dl class="app-menu-tag-dl">
           <dt>desc</dt><dd>Short Description</dd>
-          <dt>ldes</dt><dd>Long Description</dd>
+          <dt>ldes</dt><dd>Full Description</dd>
           <dt>©day</dt><dd>Release Date</dd>
           <dt>sonm</dt><dd>Sort Title</dd>
           <dt>hdvd</dt><dd>HD Video Flag</dd>
@@ -168,7 +183,7 @@ export function showHelpDialog(): void {
           <li><strong>Add videos</strong> — Drop files or folders on the drop zone, or use <strong>Select…</strong>. One file encodes next to that file; a folder can keep its layout under an optional default output folder.</li>
           <li><strong>Output folder</strong> — Leave as <strong>Same as Source File</strong> or <strong>Select…</strong> to send everything under one root (e.g. Show Name / Season …).</li>
           <li><strong>Metadata</strong> — First choose <strong>Add Metadata</strong> or <strong>Skip</strong>. Folders with several movies open one dialog per file (the button explains when another file follows). Use <strong>Back</strong> to return to the previous file or season if you advanced by mistake. TV folders may use a step per season, then unparsed filenames if needed. Optional TMDB: open <strong>Menu → Add TMDB API Key</strong> to paste a key or choose <strong>Clear</strong> there to remove it; then use <strong>Fetch Poster</strong> (artwork) or <strong>Fetch Tags from TMDB</strong> (text fields) in metadata. <strong>iTunes atom names</strong> (©nam, stik, …) are listed under <strong>Menu → Tag Reference</strong>. <strong>iTunes:</strong> use <strong>Movie</strong> or <strong>TV Show</strong> so files land under Movies or TV Shows; <strong>Skip</strong> (or per-file Skip Tagging) encodes without iTunes media kind, so imports often appear under <strong>Home Videos</strong>.</li>
-          <li><strong>Queue</strong> — Jobs run <strong>one at a time</strong>. Remove pending jobs or cancel the current encode if needed.</li>
+          <li><strong>Queue</strong> — Jobs run <strong>one at a time</strong>. Remove pending jobs or cancel the current encode if needed. <strong>Burned-in subtitles</strong> are chosen in the <strong>metadata</strong> step (per file): matching <code class="app-about-code">.srt</code> files next to the video are detected and can be included with a checkbox; use <strong>Choose .srt…</strong> when there is no match or to override. If you <strong>skip</strong> metadata, use <strong>SRT…</strong> on a pending queue row instead. The iPod only shows the baked-in picture—no separate subtitle file after sync.</li>
           <li><strong>Encode</strong> — Pod240 uses the Olsro <strong>240p30</strong> HandBrake preset for iPod Classic / Video. HandBrake CLI must be available to the app; AtomicParsley is used when you add tags.</li>
         </ol>
       </div>
@@ -207,7 +222,11 @@ export function showAboutDialog(): void {
             — Community guides (including 240p / iPod Classic &amp; Video encoding).
           </li>
         </ul>
-        <p class="app-about-thanks"><strong>Thanks</strong> to <strong>Olsro</strong> for their outstanding work documenting and supporting the iPod community.</p>
+        <p class="app-about-bundled-tools" id="app-about-tool-versions" aria-live="polite">
+          Loading bundled tool versions…
+        </p>
+        <p class="app-about-thanks"><strong>Thanks</strong> to <strong><a class="app-menu-external-link" href="https://github.com/Olsro" target="_blank" rel="noopener noreferrer">Olsro</a></strong> for their outstanding work documenting and supporting the iPod community.</p>
+        <p class="app-about-thanks"><strong>Thanks</strong> to <strong><a class="app-menu-external-link" href="https://github.com/FT129/Handbrake-and-FFmpeg-with-fdk-aac/" target="_blank" rel="noopener noreferrer">FT129</a></strong> for the Windows <code class="app-about-code">HandBrakeCLI.exe</code> and <code class="app-about-code">hb.dll</code> builds that include FDK‑AAC.</p>
       </div>
       <div class="meta-actions">
         <button type="button" id="app-about-close">Close</button>
@@ -216,49 +235,67 @@ export function showAboutDialog(): void {
 
   const close = mountOverlay(overlay);
   overlay.querySelector("#app-about-close")!.addEventListener("click", close);
+
+  const verEl = overlay.querySelector("#app-about-tool-versions") as HTMLElement | null;
+  void invoke<{ handbrakeCli: string | null; atomicParsley: string | null }>("get_tool_versions")
+    .then((v) => {
+      if (!verEl) return;
+      const hbLine = v.handbrakeCli?.trim() || "";
+      const apLine =
+        v.atomicParsley?.split(/\r?\n/).find((l) => l.trim().length > 0)?.trim() || "";
+      const hb = hbLine ? shortenHandBrakeVersionLabel(hbLine) : "Not available";
+      const ap = apLine ? shortenAtomicParsleyVersionLabel(apLine) : "Not available";
+      verEl.textContent = `HandBrake CLI — ${hb}\nAtomicParsley — ${ap}`;
+    })
+    .catch(() => {
+      if (verEl) verEl.textContent = "Could not read bundled tool versions.";
+    });
 }
 
-export async function setupAppMenu(appendLog: (s: string) => void): Promise<void> {
-  try {
-    const menuBar = await Submenu.new({
-      text: "Menu...",
-      items: [
-        await MenuItem.new({
-          id: "menu-add-tmdb-key",
-          text: "Add TMDB API Key",
-          action: () => {
-            showTmdbKeyDialog(appendLog);
-          },
-        }),
-        await MenuItem.new({
-          id: "menu-tag-reference",
-          text: "Tag Reference",
-          action: () => {
-            showTagReferenceDialog();
-          },
-        }),
-        await MenuItem.new({
-          id: "menu-help",
-          text: "Help",
-          action: () => {
-            showHelpDialog();
-          },
-        }),
-        await MenuItem.new({
-          id: "menu-about",
-          text: "About",
-          action: () => {
-            showAboutDialog();
-          },
-        }),
-      ],
-    });
+function wireInAppMenu(appendLog: (s: string) => void): void {
+  const wrap = document.getElementById("app-menu-wrap");
+  const trigger = document.getElementById("btn-app-menu");
+  const dropdown = document.getElementById("app-menu-dropdown");
+  if (!wrap || !trigger || !dropdown) return;
 
-    const menu = await Menu.new({
-      items: [menuBar],
+  const close = () => {
+    dropdown.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  };
+
+  const open = () => {
+    dropdown.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+  };
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (dropdown.hidden) open();
+    else close();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (dropdown.hidden) return;
+    if (!wrap.contains(e.target as Node)) close();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !dropdown.hidden) close();
+  });
+
+  const bind = (id: string, fn: () => void) => {
+    document.getElementById(id)?.addEventListener("click", () => {
+      close();
+      fn();
     });
-    await menu.setAsAppMenu();
-  } catch (e) {
-    appendLog(`Menu: ${String(e)}`);
-  }
+  };
+
+  bind("menu-item-tmdb", () => showTmdbKeyDialog(appendLog));
+  bind("menu-item-tag-ref", () => showTagReferenceDialog());
+  bind("menu-item-help", () => showHelpDialog());
+  bind("menu-item-about", () => showAboutDialog());
+}
+
+export function setupAppMenu(appendLog: (s: string) => void): void {
+  wireInAppMenu(appendLog);
 }

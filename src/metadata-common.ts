@@ -70,13 +70,13 @@ export function commonTagFieldsHtml(
         <span class="meta-optional-tags-title">Optional Tags</span>
       </summary>
       <div class="meta-optional-tags-body">
-      <p class="meta-tiny meta-fieldset-hint">Description, sort title, and other iTunes atoms. Every field here is optional.</p>
+      <p class="meta-tiny meta-fieldset-hint">Short and full description, sort title, and other iTunes atoms. Every field here is optional.</p>
     <fieldset class="meta-fieldset meta-fieldset--optional" id="${p}-fieldset" aria-label="Optional Tags">
       <div class="meta-fieldset-desc-grid">
-      <label>Description
-        <textarea id="${p}-desc" class="meta-input meta-textarea" rows="3" placeholder="Short Summary"></textarea>
+      <label>Short Description
+        <textarea id="${p}-desc" class="meta-input meta-textarea" rows="3" placeholder="Short Description"></textarea>
       </label>
-      <label>Long Description
+      <label>Full Description
         <textarea id="${p}-ldes" class="meta-input meta-textarea" rows="3" placeholder="Full Description"></textarea>
       </label>
       </div>

@@ -2,6 +2,7 @@
  * Downloads HandBrakeCLI + AtomicParsley into src-tauri/resources/ for self-contained builds.
  * Used by CI before `tauri build`. See scripts/third-party.json for pinned versions.
  */
+import { createHash } from "node:crypto";
 import { execFileSync, execSync } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -17,7 +18,13 @@ const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "third-party.json"),
 const HB_VER = cfg.handbrakeVersion;
 const AP = cfg.atomicParsley;
 
-const HB_WIN_ZIP = `https://github.com/HandBrake/HandBrake/releases/download/${HB_VER}/HandBrakeCLI-${HB_VER}-win-x86_64.zip`;
+/** Windows: FT129 ships CLI and libhb in two zips; official HandBrake is one zip (exe + DLLs). */
+const HB_WIN_ZIP =
+  cfg.handbrakeWindowsCliZipUrl ??
+  `https://github.com/HandBrake/HandBrake/releases/download/${HB_VER}/HandBrakeCLI-${HB_VER}-win-x86_64.zip`;
+const HB_WIN_HB_DLL_ZIP = cfg.handbrakeWindowsHbDllZipUrl ?? null;
+const HB_WIN_CLI_ZIP_SHA256 = cfg.handbrakeWindowsCliZipSha256 ?? null;
+const HB_WIN_HB_DLL_ZIP_SHA256 = cfg.handbrakeWindowsHbDllZipSha256 ?? null;
 const HB_MAC_DMG = `https://github.com/HandBrake/HandBrake/releases/download/${HB_VER}/HandBrakeCLI-${HB_VER}.dmg`;
 const AP_WIN = `https://github.com/wez/atomicparsley/releases/download/${AP.tag}/${AP.windowsZip}`;
 const AP_MAC = `https://github.com/wez/atomicparsley/releases/download/${AP.tag}/${AP.macZip}`;
@@ -38,6 +45,17 @@ async function download(url, destFile) {
   if (!res.ok) throw new Error(`GET ${url} → ${res.status} ${res.statusText}`);
   const buf = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(destFile, buf);
+}
+
+function assertFileSha256(filePath, expectedHex, label) {
+  if (!expectedHex) return;
+  const want = expectedHex.trim().toLowerCase();
+  const got = createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+  if (got !== want) {
+    throw new Error(
+      `SHA256 mismatch for ${label}: expected ${want}, got ${got}. Delete the file and retry, or update third-party.json if the upstream release changed.`,
+    );
+  }
 }
 
 function unzipToDir(zipPath, outDir) {
@@ -71,17 +89,34 @@ function flattenExtractedRoot(extractRoot) {
 
 async function vendorHandBrakeWindows() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hb-win-"));
-  const zipPath = path.join(tmp, "hb.zip");
+  const cliZip = path.join(tmp, "HandBrakeCLI.zip");
+  const hbDllZip = path.join(tmp, "hb.dll.zip");
   try {
     console.log("Downloading HandBrake CLI (Windows x86_64)…");
-    await download(HB_WIN_ZIP, zipPath);
-    const extract = path.join(tmp, "out");
-    unzipToDir(zipPath, extract);
-    const root = flattenExtractedRoot(extract);
+    await download(HB_WIN_ZIP, cliZip);
+    assertFileSha256(cliZip, HB_WIN_CLI_ZIP_SHA256, "HandBrake CLI zip");
+    const extractCli = path.join(tmp, "out-cli");
+    unzipToDir(cliZip, extractCli);
+    const rootCli = flattenExtractedRoot(extractCli);
     cleanDir(HB_DIR);
-    copyTree(root, HB_DIR);
+    copyTree(rootCli, HB_DIR);
     const exe = path.join(HB_DIR, "HandBrakeCLI.exe");
     if (!fs.existsSync(exe)) throw new Error("HandBrakeCLI.exe missing after extract");
+
+    if (HB_WIN_HB_DLL_ZIP) {
+      console.log("Downloading HandBrake libhb (hb.dll) for Windows…");
+      await download(HB_WIN_HB_DLL_ZIP, hbDllZip);
+      assertFileSha256(hbDllZip, HB_WIN_HB_DLL_ZIP_SHA256, "hb.dll zip");
+      const extractHb = path.join(tmp, "out-hb");
+      unzipToDir(hbDllZip, extractHb);
+      const rootHb = flattenExtractedRoot(extractHb);
+      copyTree(rootHb, HB_DIR);
+      const dll = path.join(HB_DIR, "hb.dll");
+      if (!fs.existsSync(dll)) {
+        throw new Error("hb.dll missing after hb DLL zip; check handbrakeWindowsHbDllZipUrl");
+      }
+    }
+
     console.log("HandBrake CLI (Windows) →", HB_DIR);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

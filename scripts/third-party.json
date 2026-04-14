@@ -1,5 +1,9 @@
 {
   "handbrakeVersion": "1.11.1",
+  "handbrakeWindowsCliZipUrl": "https://github.com/FT129/Handbrake-and-FFmpeg-with-fdk-aac/releases/download/1.11.0/HandBrakeCLI_1.11.0.zip",
+  "handbrakeWindowsCliZipSha256": "f84f752fe3f27e7958d90b006de377818e8fb4566c75d9164f312df1192e5047",
+  "handbrakeWindowsHbDllZipUrl": "https://github.com/FT129/Handbrake-and-FFmpeg-with-fdk-aac/releases/download/1.11.0/hb_1.11.0.zip",
+  "handbrakeWindowsHbDllZipSha256": "e94a7cffcccc672aef08c37a6032a6d864d62fb1b6791d706f713b0684dd3efa",
   "atomicParsley": {
     "tag": "20240608.083822.1ed9031",
     "windowsZip": "AtomicParsleyWindows.zip",

@@ -3,6 +3,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { dbgSession } from "./debug-session-log";
 import {
   applyCommonTagFields,
@@ -28,6 +29,14 @@ import {
 import { EMBEDDED_ARTWORK_SECTION_HTML, initEmbeddedArtworkBlock } from "./embedded-artwork-ui";
 
 const META_ART_FILENAME_EMPTY = "No Image Selected";
+
+async function probeSidecarSubtitle(sourcePath: string): Promise<string | null> {
+  try {
+    return await invoke<string | null>("probe_sidecar_subtitle", { sourcePath });
+  } catch {
+    return null;
+  }
+}
 
 function syncMetaArtFilenameDisplay(input: HTMLInputElement, labelEl: HTMLElement) {
   const f = input.files?.[0];
@@ -92,6 +101,8 @@ export interface EnqueueTaggedItemPayload {
   tags: EmbeddableTagsPayload;
   /** HandBrake 1-based audio source track. */
   audioTrack?: number;
+  /** Absolute path to `.srt` for HandBrake burn-in when user opted in (metadata step). */
+  subtitleBurnPath?: string;
 }
 
 export type SingleFileMetadataResult =
@@ -117,15 +128,13 @@ function applyOverviewToOptionalTags(
 ): void {
   const ov = overview?.trim();
   if (!ov) return;
-  const desc = overlay.querySelector(`#${prefix}-desc`) as HTMLTextAreaElement | null;
   const ldes = overlay.querySelector(`#${prefix}-ldes`) as HTMLTextAreaElement | null;
-  if (desc) desc.value = ov.length > 400 ? `${ov.slice(0, 397)}…` : ov;
   if (ldes) ldes.value = ov;
   const wrap = overlay.querySelector(`#${prefix}-wrap`) as HTMLDetailsElement | null;
   if (wrap) wrap.open = true;
 }
 
-/** TMDB text fields + optional descriptions only (no artwork). */
+/** TMDB text fields + full description only in optional tags (no artwork). */
 function applyTmdbTagsToSingleFileForm(
   overlay: HTMLElement,
   kind: "movie" | "tv",
@@ -227,6 +236,21 @@ function applyEnqueueItemToSingleFileForm(
       artPreview.hidden = false;
       artPreview.innerHTML = `<img src="data:image/jpeg;base64,${t.artworkBase64}" alt="" />`;
     }
+  }
+
+  const subInc = overlay.querySelector("#meta-sub-include") as HTMLInputElement | null;
+  const subLbl = overlay.querySelector("#meta-sub-label") as HTMLElement | null;
+  const subHint = overlay.querySelector("#meta-sub-hint") as HTMLElement | null;
+  if (subInc && subLbl) {
+    const sp = item.subtitleBurnPath;
+    if (sp) {
+      subInc.checked = true;
+      subLbl.textContent = basename(sp);
+    } else {
+      subInc.checked = false;
+      subLbl.textContent = "None";
+    }
+    if (subHint) subHint.textContent = "";
   }
 
   overlay.querySelectorAll(".meta-type-btn").forEach((b) => {
@@ -386,7 +410,7 @@ export function promptSingleFileMetadata(
               <button type="button" id="meta-tmdb-tags-fetch" class="meta-tmdb-fetch-btn">Fetch Tags from TMDB</button>
             </div>
             <div class="meta-tmdb-fetch-help">
-              <p class="meta-tiny">Fetches title, genre, and descriptions only. Uses IMDb ID from filename when present.</p>
+              <p class="meta-tiny">Fetches title, genre, and full description (overview) only. Short description is not filled from TMDB. Uses IMDb ID from filename when present.</p>
               <p id="meta-tmdb-tags-picks-heading" class="meta-tiny" hidden>Choose a Match Below</p>
             </div>
             <div id="meta-tmdb-tags-picks" class="meta-tmdb-picks" hidden></div>
@@ -398,6 +422,24 @@ export function promptSingleFileMetadata(
           includeComposerRow: true,
           excludeGenre: true,
         })}
+        <details id="meta-sub-wrap" class="meta-optional-tags-details meta-sub-details--single-file">
+          <summary class="meta-optional-tags-summary">
+            <span class="meta-optional-tags-title">Subtitles</span>
+          </summary>
+          <div class="meta-optional-tags-body">
+            <div id="meta-sub-burn" class="meta-section meta-sub-burn-section">
+              <label class="meta-check-label">
+                <input type="checkbox" id="meta-sub-include" />
+                Burn in Subtitles
+              </label>
+              <p id="meta-sub-hint" class="meta-tiny">—</p>
+              <div class="meta-file-row">
+                <button type="button" class="secondary" id="meta-sub-pick">Choose .srt…</button>
+                <span id="meta-sub-label" class="meta-file-filename" aria-live="polite">—</span>
+              </div>
+            </div>
+          </div>
+        </details>
         ${EMBEDDED_ARTWORK_SECTION_HTML}
         <div id="meta-art" class="meta-section">
           <label class="meta-file-label" for="meta-art-file">Artwork (Optional)</label>
@@ -515,6 +557,46 @@ export function promptSingleFileMetadata(
       mvvSong.value = st;
     }
 
+    let priorKind: typeof kind = kind;
+
+    const subInclude = overlay.querySelector("#meta-sub-include") as HTMLInputElement;
+    const subLabel = overlay.querySelector("#meta-sub-label") as HTMLElement;
+    const subHint = overlay.querySelector("#meta-sub-hint") as HTMLElement;
+    const subPick = overlay.querySelector("#meta-sub-pick") as HTMLButtonElement;
+    let burnSubPath: string | null = prefillItem?.subtitleBurnPath ?? null;
+
+    subPick.addEventListener("click", async () => {
+      const sel = await open({
+        filters: [{ name: "Subtitles", extensions: ["srt"] }],
+        multiple: false,
+      });
+      if (typeof sel !== "string" || !sel) return;
+      burnSubPath = sel;
+      subLabel.textContent = basename(sel);
+      subInclude.checked = true;
+    });
+
+    if (prefillItem?.subtitleBurnPath) {
+      subHint.textContent = "Restored from a previous step.";
+    } else {
+      subHint.textContent = "Looking for a .srt next to this file…";
+      void (async () => {
+        const probed = await probeSidecarSubtitle(file.sourcePath);
+        burnSubPath = probed;
+        if (probed) {
+          subInclude.checked = false;
+          subLabel.textContent = basename(probed);
+          subHint.textContent =
+            "A matching .srt was found. Check the box above to burn it in, or use Choose .srt… to pick a different file.";
+        } else {
+          subInclude.checked = false;
+          subLabel.textContent = "None";
+          subHint.textContent =
+            "No matching .srt found. Use Choose .srt… to add one.";
+        }
+      })();
+    }
+
     function syncTmdbUi() {
       void getStoredTmdbApiKey().then((key) => {
         const has = Boolean(key);
@@ -548,6 +630,16 @@ export function promptSingleFileMetadata(
       if (secArt) secArt.hidden = kind === "skip";
       const compRow = overlay.querySelector("#meta-common-composer-row") as HTMLElement | null;
       if (compRow) compRow.hidden = kind !== "musicVideo";
+      const subWrap = overlay.querySelector("#meta-sub-wrap") as HTMLDetailsElement | null;
+      if (subWrap) {
+        subWrap.hidden = kind === "skip";
+        if (kind === "tv") {
+          subWrap.open = true;
+        } else if ((kind === "movie" || kind === "musicVideo") && priorKind === "tv") {
+          subWrap.open = false;
+        }
+      }
+      priorKind = kind;
       syncTmdbUi();
       setActiveTypeButtons();
     }
@@ -824,6 +916,12 @@ export function promptSingleFileMetadata(
     });
 
     overlay.querySelector("#meta-ok")!.addEventListener("click", () => {
+      if (subInclude.checked && !burnSubPath) {
+        appendLog("Choose a .srt file for burn-in, or turn off burned-in subtitles.");
+        return;
+      }
+      const subBurn = subInclude.checked && burnSubPath ? burnSubPath : undefined;
+
       if (kind === "skip") {
         cleanup(
           {
@@ -832,6 +930,7 @@ export function promptSingleFileMetadata(
               sourcePath: file.sourcePath,
               treeRoot: file.treeRoot,
               tags: { kind: "skip" },
+              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
             },
           },
           "ok_skip"
@@ -867,6 +966,7 @@ export function promptSingleFileMetadata(
                 artworkBase64: art,
                 ...common,
               },
+              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
             },
           },
           "ok_movie"
@@ -893,6 +993,7 @@ export function promptSingleFileMetadata(
                 sortShow: tvSorts.value.trim() || undefined,
                 ...common,
               },
+              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
             },
           },
           "ok_tv"
@@ -917,6 +1018,7 @@ export function promptSingleFileMetadata(
               compilation: mvvCpil.checked ? true : undefined,
               ...common,
             },
+            ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
           },
         },
         "ok_musicVideo"
@@ -1001,7 +1103,7 @@ export function promptTvSeasonGroupBatch(
               <button type="button" id="meta-tmdb-tags-fetch" class="meta-tmdb-fetch-btn">Fetch Tags from TMDB</button>
             </div>
             <div class="meta-tmdb-fetch-help">
-              <p class="meta-tiny">Fetches show name, genre, and descriptions only. Uses IMDb ID from the first filename when present.</p>
+              <p class="meta-tiny">Fetches show name, genre, and full description (overview) only. Short description is not filled from TMDB. Uses IMDb ID from the first filename when present.</p>
               <p id="meta-tmdb-tags-picks-heading" class="meta-tiny" hidden>Choose a Match Below</p>
             </div>
             <div id="meta-tmdb-tags-picks" class="meta-tmdb-picks" hidden></div>
@@ -1015,7 +1117,7 @@ export function promptTvSeasonGroupBatch(
         ${EMBEDDED_ARTWORK_SECTION_HTML}
         <div class="meta-batch-wrap">
           <table class="meta-batch-table" id="tv-batch-table"><thead><tr>
-            <th>File</th><th>Episode</th><th>Title</th>
+            <th>File</th><th>Episode</th><th>Title</th><th>Subs</th>
           </tr></thead><tbody></tbody></table>
         </div>
         <div id="meta-art" class="meta-section">
@@ -1097,6 +1199,8 @@ export function promptTvSeasonGroupBatch(
     });
 
     const batchInputs: { episode: HTMLInputElement; title: HTMLInputElement }[] = [];
+    const batchSubPaths: (string | null)[] = new Array(files.length).fill(null);
+    const batchSubCells: { inc: HTMLInputElement; cap: HTMLElement }[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i]!;
@@ -1107,12 +1211,31 @@ export function promptTvSeasonGroupBatch(
       const epVal = p.ok && p.episode != null ? String(p.episode) : "";
       tr.innerHTML = `<td title="${f.sourcePath.replace(/"/g, "&quot;")}">${shortName}</td>
         <td><input type="number" class="meta-input mini" data-i="${i}" min="1" value="${epVal}" placeholder="Required" /></td>
-        <td><input type="text" class="meta-input" data-i="${i}" placeholder="Optional" /></td>`;
+        <td><input type="text" class="meta-input" data-i="${i}" placeholder="Optional" /></td>
+        <td class="meta-batch-sub"><label class="meta-check-label meta-batch-sub-check"><input type="checkbox" class="tv-batch-sub-inc" /></label>
+        <span class="tv-batch-sub-cap meta-tiny">…</span>
+        <button type="button" class="secondary tv-batch-sub-pick">SRT…</button></td>`;
       tvBatchBody.appendChild(tr);
-      const ins = tr.querySelectorAll("input");
+      const tds = tr.querySelectorAll("td");
       batchInputs.push({
-        episode: ins[0] as HTMLInputElement,
-        title: ins[1] as HTMLInputElement,
+        episode: tds[1]!.querySelector("input") as HTMLInputElement,
+        title: tds[2]!.querySelector("input") as HTMLInputElement,
+      });
+      const subTd = tr.querySelector(".meta-batch-sub") as HTMLElement;
+      const subInc = subTd.querySelector(".tv-batch-sub-inc") as HTMLInputElement;
+      const subCap = subTd.querySelector(".tv-batch-sub-cap") as HTMLElement;
+      const subPick = subTd.querySelector(".tv-batch-sub-pick") as HTMLButtonElement;
+      batchSubCells.push({ inc: subInc, cap: subCap });
+      const idx = i;
+      subPick.addEventListener("click", async () => {
+        const sel = await open({
+          filters: [{ name: "Subtitles", extensions: ["srt"] }],
+          multiple: false,
+        });
+        if (typeof sel !== "string" || !sel) return;
+        batchSubPaths[idx] = sel;
+        subInc.checked = true;
+        subCap.textContent = basename(sel);
       });
     }
 
@@ -1177,6 +1300,29 @@ export function promptTvSeasonGroupBatch(
       const st = stem(files[0].sourcePath);
       tvBatchShow.value = h?.displayTitle || files[0].parse.inferredShow || st;
     }
+
+    void (async () => {
+      const results = await Promise.all(files.map((f) => probeSidecarSubtitle(f.sourcePath)));
+      for (let i = 0; i < files.length; i++) {
+        const prefSub = prefItems?.[i]?.subtitleBurnPath;
+        if (prefSub) {
+          batchSubPaths[i] = prefSub;
+          batchSubCells[i]!.inc.checked = true;
+          batchSubCells[i]!.cap.textContent = basename(prefSub);
+          continue;
+        }
+        const p = results[i] ?? null;
+        batchSubPaths[i] = p;
+        const c = batchSubCells[i]!;
+        if (p) {
+          c.inc.checked = false;
+          c.cap.textContent = basename(p);
+        } else {
+          c.inc.checked = false;
+          c.cap.textContent = "—";
+        }
+      }
+    })();
 
     artFile.addEventListener("change", async () => {
       syncMetaArtFilenameDisplay(artFile, artFilename);
@@ -1402,6 +1548,12 @@ export function promptTvSeasonGroupBatch(
           appendLog(`Episode required for ${basename(f.sourcePath)}.`);
           return;
         }
+        if (batchSubCells[i]!.inc.checked && !batchSubPaths[i]) {
+          appendLog(`Choose a .srt or uncheck subtitles for ${basename(f.sourcePath)}.`);
+          return;
+        }
+        const subBurn =
+          batchSubCells[i]!.inc.checked && batchSubPaths[i] ? batchSubPaths[i]! : undefined;
         items.push({
           sourcePath: f.sourcePath,
           treeRoot: f.treeRoot,
@@ -1416,6 +1568,7 @@ export function promptTvSeasonGroupBatch(
             sortShow,
             ...common,
           },
+          ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
         });
       }
       cleanup({ type: "tagged", items }, "ok_confirm");
@@ -1473,7 +1626,7 @@ export function promptTvUnparsedOrphans(
               <button type="button" id="meta-tmdb-tags-fetch" class="meta-tmdb-fetch-btn">Fetch Tags from TMDB</button>
             </div>
             <div class="meta-tmdb-fetch-help">
-              <p class="meta-tiny">Fetches show name, genre, and descriptions only. Uses IMDb ID from the first filename when present.</p>
+              <p class="meta-tiny">Fetches show name, genre, and full description (overview) only. Short description is not filled from TMDB. Uses IMDb ID from the first filename when present.</p>
               <p id="meta-tmdb-tags-picks-heading" class="meta-tiny" hidden>Choose a Match Below</p>
             </div>
             <div id="meta-tmdb-tags-picks" class="meta-tmdb-picks" hidden></div>
@@ -1487,7 +1640,7 @@ export function promptTvUnparsedOrphans(
         ${EMBEDDED_ARTWORK_SECTION_HTML}
         <div class="meta-batch-wrap">
           <table class="meta-batch-table" id="tv-orph-table"><thead><tr>
-            <th>File</th><th>Season</th><th>Episode</th><th>Title</th>
+            <th>File</th><th>Season</th><th>Episode</th><th>Title</th><th>Subs</th>
           </tr></thead><tbody></tbody></table>
         </div>
         <div id="meta-art" class="meta-section">
@@ -1568,6 +1721,8 @@ export function promptTvUnparsedOrphans(
     });
 
     const rowInputs: { season: HTMLInputElement; episode: HTMLInputElement; title: HTMLInputElement }[] = [];
+    const orphSubPaths: (string | null)[] = new Array(files.length).fill(null);
+    const orphSubCells: { inc: HTMLInputElement; cap: HTMLElement }[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i]!;
@@ -1577,13 +1732,32 @@ export function promptTvUnparsedOrphans(
       tr.innerHTML = `<td title="${f.sourcePath.replace(/"/g, "&quot;")}">${shortName}</td>
         <td><input type="number" class="meta-input mini" min="0" placeholder="" /></td>
         <td><input type="number" class="meta-input mini" min="1" placeholder="" /></td>
-        <td><input type="text" class="meta-input" placeholder="Optional" /></td>`;
+        <td><input type="text" class="meta-input" placeholder="Optional" /></td>
+        <td class="meta-batch-sub"><label class="meta-check-label meta-batch-sub-check"><input type="checkbox" class="tv-orph-sub-inc" /></label>
+        <span class="tv-orph-sub-cap meta-tiny">…</span>
+        <button type="button" class="secondary tv-orph-sub-pick">SRT…</button></td>`;
       tbody.appendChild(tr);
-      const ins = tr.querySelectorAll("input");
+      const tds = tr.querySelectorAll("td");
       rowInputs.push({
-        season: ins[0] as HTMLInputElement,
-        episode: ins[1] as HTMLInputElement,
-        title: ins[2] as HTMLInputElement,
+        season: tds[1]!.querySelector("input") as HTMLInputElement,
+        episode: tds[2]!.querySelector("input") as HTMLInputElement,
+        title: tds[3]!.querySelector("input") as HTMLInputElement,
+      });
+      const subTd = tr.querySelector(".meta-batch-sub") as HTMLElement;
+      const subInc = subTd.querySelector(".tv-orph-sub-inc") as HTMLInputElement;
+      const subCap = subTd.querySelector(".tv-orph-sub-cap") as HTMLElement;
+      const subPick = subTd.querySelector(".tv-orph-sub-pick") as HTMLButtonElement;
+      orphSubCells.push({ inc: subInc, cap: subCap });
+      const idx = i;
+      subPick.addEventListener("click", async () => {
+        const sel = await open({
+          filters: [{ name: "Subtitles", extensions: ["srt"] }],
+          multiple: false,
+        });
+        if (typeof sel !== "string" || !sel) return;
+        orphSubPaths[idx] = sel;
+        subInc.checked = true;
+        subCap.textContent = basename(sel);
       });
     }
 
@@ -1648,6 +1822,29 @@ export function promptTvUnparsedOrphans(
       const st = stem(files[0].sourcePath);
       tvOrphShow.value = h?.displayTitle || files[0].parse.inferredShow || st;
     }
+
+    void (async () => {
+      const results = await Promise.all(files.map((f) => probeSidecarSubtitle(f.sourcePath)));
+      for (let i = 0; i < files.length; i++) {
+        const prefSub = prefOr?.[i]?.subtitleBurnPath;
+        if (prefSub) {
+          orphSubPaths[i] = prefSub;
+          orphSubCells[i]!.inc.checked = true;
+          orphSubCells[i]!.cap.textContent = basename(prefSub);
+          continue;
+        }
+        const p = results[i] ?? null;
+        orphSubPaths[i] = p;
+        const c = orphSubCells[i]!;
+        if (p) {
+          c.inc.checked = false;
+          c.cap.textContent = basename(p);
+        } else {
+          c.inc.checked = false;
+          c.cap.textContent = "—";
+        }
+      }
+    })();
 
     artFile.addEventListener("change", async () => {
       syncMetaArtFilenameDisplay(artFile, artFilename);
@@ -1874,6 +2071,12 @@ export function promptTvUnparsedOrphans(
           appendLog(`Episode required for ${basename(f.sourcePath)}.`);
           return;
         }
+        if (orphSubCells[i]!.inc.checked && !orphSubPaths[i]) {
+          appendLog(`Choose a .srt or uncheck subtitles for ${basename(f.sourcePath)}.`);
+          return;
+        }
+        const subBurn =
+          orphSubCells[i]!.inc.checked && orphSubPaths[i] ? orphSubPaths[i]! : undefined;
         items.push({
           sourcePath: f.sourcePath,
           treeRoot: f.treeRoot,
@@ -1888,6 +2091,7 @@ export function promptTvUnparsedOrphans(
             sortShow,
             ...common,
           },
+          ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
         });
       }
       cleanup({ type: "tagged", items }, "ok_confirm");
