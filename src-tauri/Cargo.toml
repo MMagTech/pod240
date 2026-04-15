@@ -1,6 +1,6 @@
 [package]
 name = "pod240"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pod240 — iPod 240p converter (Olsro preset)"
 authors = ["you"]
 edition = "2021"
