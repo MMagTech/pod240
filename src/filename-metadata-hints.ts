@@ -90,3 +90,50 @@ export function parseFilenameMetadataHints(fileStem: string): FilenameMetadataHi
     displayTitle,
   };
 }
+
+/**
+ * Strip YouTube-style clutter (video id, “(1)” copies), “Official Music Video”, etc.
+ * so `Artist - Title` parsing works on ripped downloads without manual editing.
+ */
+export function sanitizeMusicVideoFileStem(stem: string): string {
+  let s = stem.trim().replace(/\s+/g, " ");
+
+  s = s.replace(/\s*\(\s*Official\s+Music\s+Video\s*\)/gi, "");
+  s = s.replace(/\s*\(\s*Official\s+Video\s*\)/gi, "");
+  s = s.replace(/\s*\(\s*Official\s+Audio\s*\)/gi, "");
+  s = s.replace(/\s*\(\s*Lyric\s+Video\s*\)/gi, "");
+  s = s.replace(/\s*\(\s*Lyrics\s*\)/gi, "");
+  s = s.replace(/\s*\[\s*Official\s+Music\s+Video\s*\]/gi, "");
+  s = s.replace(/\s*\[\s*Official\s+Video\s*\]/gi, "");
+
+  for (let i = 0; i < 3; i++) {
+    const before = s;
+    s = s.replace(/\s*\[\s*(?:1080|720|480|4K|HD|HQ|60fps)\s*\]\s*$/i, "").trim();
+    if (s === before) break;
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const before = s;
+    s = s.replace(/\s*\(\d{1,3}\)\s*$/g, "").trim();
+    s = s.replace(/-[a-zA-Z0-9_-]{11}\s*$/g, "").trim();
+    if (s === before) break;
+  }
+
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Split `Artist - Title` style stems for music-video defaults (first ` - ` wins).
+ */
+export function parseMusicVideoArtistTitle(stem: string): { artist: string; title: string } {
+  const s = sanitizeMusicVideoFileStem(stem);
+  if (!s) return { artist: "", title: "" };
+  const parts = s.split(/\s+-\s+/);
+  if (parts.length >= 2) {
+    return {
+      artist: parts[0]!.trim(),
+      title: parts.slice(1).join(" - ").trim(),
+    };
+  }
+  return { artist: "", title: s };
+}

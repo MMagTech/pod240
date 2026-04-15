@@ -1,78 +1,45 @@
 # Pod240
 
-Small desktop app (**Tauri 2**) that converts videos for **iPod Classic / iPod Video** using the **Olsro “Apple 240p30”** HandBrake presets ([guide](https://github.com/Olsro/reddit-ipod-guides/blob/main/guides/ipod-encode-240p-video-content.md)).
+**Pod240** is a small desktop app for **Windows** and **macOS** that converts videos for **iPod Classic** and **iPod Video (5th gen)** using the community **Olsro “Apple 240p30”** HandBrake preset. For background on why 240p and how it fits iPod limits, see [Olsro’s iPod encode guide](https://github.com/Olsro/reddit-ipod-guides/blob/main/guides/ipod-encode-240p-video-content.md).
 
-- Drag-and-drop or file picker, **queued** conversions (**one encode at a time**).
-- Optional **default output folder**; otherwise outputs next to each source file as `*_ipod240p.mp4`.
-- Settings are stored in `pod240-settings.json` next to the executable (portable, no Windows Registry).
+**Developers** building from source: see [DEVELOPMENT.md](DEVELOPMENT.md).
 
-## Requirements
+## Download and install
 
-1. **Rust** (e.g. [rustup](https://rustup.rs/)) and **Node.js 18+**.
-2. **HandBrake CLI** and **AtomicParsley** for a working encode + tagging pipeline.
+Get the latest **Windows** or **macOS** build from the project’s **Releases** page on GitHub (`https://github.com/<owner>/<repo>/releases`). You do **not** need to install Rust, Node.js, or HandBrake by hand for a normal release install—the app bundles what it needs to encode and tag.
 
-   **Easiest (recommended):** download third-party CLIs into `src-tauri/resources/` automatically:
+## First launch (unsigned builds)
 
-   ```bash
-   npm run vendor:release
-   ```
+Release installers are **not** code-signed. **Windows** may show **SmartScreen**; choose “More info” / “Run anyway” if you trust the download. **macOS** may block the app until you **right‑click → Open** the first time, or allow it under **System Settings → Privacy & Security**. This is typical for unsigned open-source builds.
 
-   Versions are pinned in [`scripts/third-party.json`](scripts/third-party.json). This matches what **GitHub Actions** runs before release builds.
+## What you get in the box
 
-   **Or** copy `HandBrakeCLI` and required libraries into `src-tauri/resources/handbrake/` and the AtomicParsley binary into `src-tauri/resources/atomicparsley/` (see the `README.txt` files there), **or** set `POD240_HANDBRAKE_CLI` / `POD240_ATOMICPARSLEY` to full paths.
+- **Encoding:** HandBrake CLI with the bundled **Olsro 240p30** preset (see [THIRD_PARTY.md](THIRD_PARTY.md) for licenses and components).
+- **Tags:** AtomicParsley is used when you add **metadata** in the app (iTunes-style tags on the finished `.mp4`).
+- **FFmpeg (optional):** Not required for basic conversion. If you place `ffmpeg` and `ffprobe` in the app’s **`resources/ffmpeg`** folder (a README there explains typical layouts), Pod240 can use them for **music video frame capture** and preview when the built-in player cannot decode a file. You can also point the **`POD240_FFMPEG`** environment variable at that folder or at `ffmpeg` directly.
 
-   HandBrake is **GPLv2** — see [THIRD_PARTY.md](THIRD_PARTY.md).
+## Using Pod240
 
-## Development
+1. **Add videos:** Use **Choose files** or **drag and drop** onto the window.
+2. **Metadata (optional):** When prompted, you can add **Add Metadata** (movie / TV / music video tags, optional TMDB key for posters and text) or **Skip** to encode without those tags.
+3. **Queue:** Jobs run **one at a time**. You can reorder **pending** jobs by dragging the handle on each row.
+4. **Output folder:** By default, converted files go **next to each source file**. You can set a **default output folder** in the UI so folder drops mirror their structure under that folder; single files can still follow the default or same-folder behavior depending on how you added them.
+5. **While encoding:** **Cancel** stops the current encode. **Clear queue** removes jobs that are not currently encoding. **Closing the window** (X) asks for confirmation if something is still **encoding** or **waiting** in the queue—unfinished work is lost if you confirm.
 
-```bash
-npm install
-npm run tauri:dev
-```
+## Output files
 
-Use **`npm run tauri:dev`** (not `npm run tauri dev`) on Windows if you see `cargo metadata` / `program not found`: it prepends `%USERPROFILE%\.cargo\bin` to `PATH` for that run.
+Converted files are **`.mp4`** in **240p** (per the Olsro preset). The app picks a filename that does not overwrite your source: usually `YourVideo.mp4` in the output folder; if that name is taken or would overwrite the source, it uses `YourVideo_ipod240p.mp4`, then `YourVideo_ipod240p_2.mp4`, and so on.
 
-**Do not open `http://localhost:1420/` in Chrome/Edge as the app.** That URL is only for the **desktop window’s** embedded browser. A normal browser cannot run Tauri APIs (`invoke`, native dialogs, etc.), so the page may look blank or broken. Wait until **`cargo run` finishes** and a **Pod240** window opens—that is the app.
+## Limitations
 
-To fix permanently: add `C:\Users\<you>\.cargo\bin` to your **user** `Path` (Settings → System → About → Advanced system settings → Environment Variables), then **restart** the terminal.
+**DRM-protected** purchases (e.g. many store-bought downloads) **cannot** be converted. Use files you own that are not copy-protected.
 
-If Rust isn’t installed: [https://rustup.rs/](https://rustup.rs/) or `winget install Rustlang.Rustup`.
+## Settings
 
-## Build
+Preferences (such as default output folder and optional TMDB API key) are stored in **`pod240-settings.json`** next to the application executable—handy for a **portable** install with no Windows Registry dependency.
 
-```bash
-npm run tauri build
-```
+## Credits and licenses
 
-DRM-protected store purchases cannot be converted.
-
-## GitHub releases (CI)
-
-Official **Windows** and **macOS** installers are built in [GitHub Actions](.github/workflows/release.yml) when you push a **version tag**. Each build vendors **HandBrake CLI** and **AtomicParsley** into the app so end users do **not** install those tools separately.
-
-### Publish a version
-
-1. Bump the version consistently in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (same semver as the tag, without the `v` prefix).
-2. Commit and push to `main` (or your default branch) as usual.
-3. Tag and push:
-
-   ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-
-   Use your real version instead of `0.1.0`.
-
-The workflow runs on that tag, builds **Windows (x64)** and **macOS (Apple Silicon + Intel)** artifacts, creates or updates a **GitHub Release** for that tag, and attaches the bundles.
-
-### Where to download
-
-After the workflow finishes, open the repository’s **Releases** page on GitHub (`https://github.com/<owner>/<repo>/releases`) and download the `.msi` / `.exe` / `.dmg` (or other bundles Tauri produced) for your platform.
-
-### Unsigned builds
-
-These release artifacts are **not** code-signed or notarized. Windows may show **SmartScreen**; on macOS you may need to **right‑click → Open** the first time. This is normal for hobby/open-source builds until you add signing.
-
-### Repo settings
-
-If the workflow fails to create the release with a permissions error, set **Settings → Actions → General → Workflow permissions** to **Read and write** so `GITHUB_TOKEN` can publish releases. No extra secrets are required for unsigned builds.
+- Preset lineage and community context: **Olsro** / [reddit-ipod-guides](https://github.com/Olsro/reddit-ipod-guides).
+- Third-party tools and attribution: **[THIRD_PARTY.md](THIRD_PARTY.md)**.
+- Pod240 application license: **[LICENSE](LICENSE)**.

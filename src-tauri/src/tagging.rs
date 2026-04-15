@@ -1,8 +1,10 @@
 //! Episode filename hints, artwork → JPEG for `covr`, and AtomicParsley invocation.
 
 use std::io::Cursor;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use image::imageops::FilterType;
@@ -11,6 +13,93 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::resources_root;
+
+/// AtomicParsley’s default `--overWrite` temp lives beside the source; network/special folders may deny that.
+/// `--output` writes to an arbitrary path (voids `--overWrite`); we use the OS temp dir, then copy over the original.
+fn atomicparsley_scratch_path() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "pod240-ap-{}.mp4",
+        uuid::Uuid::new_v4()
+    ))
+}
+
+/// Helps SMB / network volumes show updated bytes to the next reader (e.g. Lofty probe).
+pub(crate) fn sync_file_data_best_effort(path: &std::path::Path) {
+    use std::fs::OpenOptions;
+    let open = OpenOptions::new().read(true).write(true).open(path);
+    let open = open.or_else(|_| std::fs::File::open(path));
+    if let Ok(f) = open {
+        let _ = f.sync_all();
+    }
+}
+
+/// Copy `scratch` onto `destination`, replacing it. Some SMB shares deny `CopyFile` overwrite but allow
+/// delete + create; we retry transient locks, then use backup/remove/copy with restore on failure.
+pub(crate) fn replace_file_from_local_scratch(
+    scratch: &Path,
+    destination: &Path,
+    err_ctx: &str,
+) -> Result<(), String> {
+    for attempt in 0u32..3 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(150));
+        }
+        match std::fs::copy(scratch, destination) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(scratch);
+                sync_file_data_best_effort(destination);
+                return Ok(());
+            }
+            Err(e) if e.kind() == ErrorKind::PermissionDenied => continue,
+            Err(e) => {
+                let _ = std::fs::remove_file(scratch);
+                return Err(format!("{err_ctx}: {e}"));
+            }
+        }
+    }
+
+    let backup = std::env::temp_dir().join(format!(
+        "pod240-repl-bak-{}.mp4",
+        uuid::Uuid::new_v4()
+    ));
+    if let Err(e) = std::fs::copy(destination, &backup) {
+        let _ = std::fs::remove_file(scratch);
+        return Err(format!("{err_ctx} (backup original): {e}"));
+    }
+    if let Err(e) = std::fs::remove_file(destination) {
+        let _ = std::fs::remove_file(&backup);
+        let _ = std::fs::remove_file(scratch);
+        return Err(format!(
+            "{err_ctx}: close other apps using the file, then try again: {e}"
+        ));
+    }
+    match std::fs::copy(scratch, destination) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(scratch);
+            let _ = std::fs::remove_file(backup);
+            sync_file_data_best_effort(destination);
+            Ok(())
+        }
+        Err(e2) => match std::fs::copy(&backup, destination) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(backup);
+                let _ = std::fs::remove_file(scratch);
+                Err(format!("{err_ctx}: {e2}"))
+            }
+            Err(e3) => {
+                let _ = std::fs::remove_file(scratch);
+                Err(format!(
+                    "{err_ctx}: {e2}; could not restore original ({e3}). Backup: {}",
+                    backup.display()
+                ))
+            }
+        },
+    }
+}
+
+fn atomicparsley_apply_output(scratch: &Path, destination: &Path) -> Result<(), String> {
+    replace_file_from_local_scratch(scratch, destination, "could not replace file after tagging")
+}
 
 /// Optional iTunes atoms shared by movie / TV / music video (see UI “Common” section).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -390,15 +479,21 @@ fn append_common_itunes_tags(cmd: &mut Command, c: &CommonItunesTags, skip_relea
     }
 }
 
-/// Apply iTunes-style atoms. Overwrites the file in place (`--overWrite`).
+/// Apply iTunes-style atoms. Writes via `--output` to the OS temp dir, then replaces `video` (works when the
+/// source folder cannot create AtomicParsley’s default sibling temp file, e.g. some network shares).
+///
+/// `omit_embedded_cover_on_output`: strip any inherited cover on `video` before applying tags (user chose not to
+/// carry source-embedded art onto the encode output). Ignored when new artwork is supplied (we already REMOVE_ALL).
 pub fn run_atomicparsley(
     exe: &Path,
     video: &Path,
     tags: &EmbeddableTags,
     artwork_jpeg: Option<&Path>,
+    omit_embedded_cover_on_output: bool,
 ) -> Result<(), String> {
+    let scratch = atomicparsley_scratch_path();
     let mut cmd = Command::new(exe);
-    cmd.arg(video).arg("--overWrite");
+    cmd.arg(video);
 
     match tags {
         EmbeddableTags::Skip => return Ok(()),
@@ -492,40 +587,25 @@ pub fn run_atomicparsley(
         // artwork can remain and iTunes often displays the first embedded image, not the new one.
         cmd.arg("--artwork").arg("REMOVE_ALL");
         cmd.arg("--artwork").arg(j);
+    } else if omit_embedded_cover_on_output {
+        cmd.arg("--artwork").arg("REMOVE_ALL");
     }
 
-    let out = cmd.output().map_err(|e| format!("AtomicParsley: {e}"))?;
-    if out.status.success() {
-        return Ok(());
-    }
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    Err(format!(
-        "AtomicParsley failed ({}): {}\n{}",
-        out.status,
-        stderr.trim(),
-        stdout.trim()
-    ))
-}
+    cmd.arg("--output").arg(&scratch);
 
-/// Removes all embedded `covr` images only; other iTunes atoms are left unchanged.
-pub fn strip_embedded_artwork_atoms(exe: &Path, video: &Path) -> Result<(), String> {
-    let mut cmd = Command::new(exe);
-    cmd.arg(video);
-    cmd.arg("--overWrite");
-    cmd.arg("--artwork").arg("REMOVE_ALL");
     let out = cmd.output().map_err(|e| format!("AtomicParsley: {e}"))?;
-    if out.status.success() {
-        return Ok(());
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&scratch);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        return Err(format!(
+            "AtomicParsley failed ({}): {}\n{}",
+            out.status,
+            stderr.trim(),
+            stdout.trim()
+        ));
     }
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    Err(format!(
-        "AtomicParsley failed ({}): {}\n{}",
-        out.status,
-        stderr.trim(),
-        stdout.trim()
-    ))
+    atomicparsley_apply_output(&scratch, video)
 }
 
 #[cfg(test)]

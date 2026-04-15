@@ -76,12 +76,12 @@ export async function runMetadataWizard(
         const baseSeasonLine =
           totalSeasonSteps > 1
             ? `Season ${group.season} of ${totalSeasonSteps} (${subset.length} file(s)).`
-            : "One season — shared show name and artwork. Episode numbers are per file.";
+            : "One season — shared show name and cover. Episode numbers are per file.";
 
         const hintParts: string[] = [];
         if (si > 0) {
           hintParts.push(
-            "Show, network, sort show, optional tags (including release date), and artwork are prefilled from the previous season — edit only if needed."
+            "Show, network, sort show, optional tags (including release date), and cover is prefilled from the previous season — edit only if needed."
           );
         }
         hintParts.push(baseSeasonLine);

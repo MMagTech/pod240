@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { setupAppMenu } from "./app-menu";
+import { setupExternalLinkDelegation } from "./open-external";
 import { hideBusy, showBusy, showCheckingAudioTracks, updateBusyProgress } from "./busy-overlay";
 import { pickAudioTracksForSources } from "./audio-track-modal";
 import { runMetadataWizard } from "./metadata-flow";
@@ -43,6 +44,11 @@ const hbWarning = document.getElementById("hb-warning")!;
 const apWarning = document.getElementById("ap-warning")!;
 
 let jobs: Job[] = [];
+
+/** Pending or encoding jobs — closing would interrupt work or drop the queue. */
+function queueNeedsCloseConfirmation(): boolean {
+  return jobs.some((j) => j.status === "pending" || j.status === "encoding");
+}
 
 /**
  * WebView2 often fails to deliver pointer moves after setPointerCapture.
@@ -188,7 +194,7 @@ function renderQueue() {
       name.title += `\nAudio track: ${job.audio_track}`;
     }
     if (job.subtitle_burn_path) {
-      name.title += `\nBurn-in subtitles: ${job.subtitle_burn_path}`;
+      name.title += `\nSubtitles: ${job.subtitle_burn_path}`;
     }
 
     main.appendChild(name);
@@ -199,15 +205,17 @@ function renderQueue() {
       const meta = document.createElement("span");
       meta.className = "queue-sub-meta";
       if (job.subtitle_burn_path) {
-        meta.textContent = `Burn-in: ${subtitleBasename(job.subtitle_burn_path)}`;
+        meta.textContent = `Subtitles: ${subtitleBasename(job.subtitle_burn_path)}`;
+        meta.title = job.subtitle_burn_path;
       } else {
-        meta.textContent = "No .srt selected (optional)";
+        meta.textContent = "No Subtitles Selected (Optional)";
+        meta.title = "";
       }
       const btnRow = document.createElement("span");
       btnRow.className = "queue-sub-actions";
       const pick = document.createElement("button");
       pick.type = "button";
-      pick.className = "queue-sub-btn secondary";
+      pick.className = "queue-sub-btn queue-sub-btn--pick secondary";
       pick.textContent = "SRT…";
       pick.title = "Choose a SubRip file to burn into the video";
       pick.addEventListener("click", (ev) => {
@@ -230,7 +238,7 @@ function renderQueue() {
       });
       const clear = document.createElement("button");
       clear.type = "button";
-      clear.className = "queue-sub-btn secondary";
+      clear.className = "queue-sub-btn queue-sub-btn--clear secondary";
       clear.textContent = "Clear";
       clear.disabled = !job.subtitle_burn_path;
       clear.title = "Remove burned-in subtitle for this job";
@@ -256,9 +264,9 @@ function renderQueue() {
       status.textContent = job.status;
     }
 
-    li.appendChild(drag);
-    li.appendChild(main);
-    li.appendChild(status);
+    const aside = document.createElement("div");
+    aside.className = "queue-item-aside";
+    aside.appendChild(status);
 
     if (job.status === "pending") {
       const rm = document.createElement("button");
@@ -269,8 +277,12 @@ function renderQueue() {
         ev.stopPropagation();
         invoke("remove_job", { jobId: job.id }).catch((e) => appendLog(String(e)));
       };
-      li.appendChild(rm);
+      aside.appendChild(rm);
     }
+
+    li.appendChild(drag);
+    li.appendChild(main);
+    li.appendChild(aside);
 
     if (job.status === "failed" && job.error) {
       name.title = job.error;
@@ -439,6 +451,7 @@ btnCancel.addEventListener("click", () => {
 });
 
 void (async () => {
+  setupExternalLinkDelegation();
   setupDropzone();
   setupAppMenu(appendLog);
 
@@ -478,4 +491,18 @@ void (async () => {
   }
 
   await refreshQueue();
+
+  void getCurrentWindow()
+    .onCloseRequested(async (event) => {
+      if (!queueNeedsCloseConfirmation()) return;
+      event.preventDefault();
+      const ok = await confirm(
+        "Current encode progress and queue will be lost. Select Okay to close or Cancel to return to app.",
+        { title: "Quit Pod240?", kind: "warning" }
+      );
+      if (ok) {
+        await getCurrentWindow().destroy();
+      }
+    })
+    .catch(() => {});
 })();

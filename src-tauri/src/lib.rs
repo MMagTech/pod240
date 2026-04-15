@@ -1,5 +1,7 @@
 mod audio_probe;
 mod embedded_artwork;
+mod ffmpeg_frame;
+mod musicbrainz;
 mod subtitle_sidecar;
 mod tagging;
 
@@ -43,6 +45,9 @@ struct Job {
     /// Absolute path to a `.srt` file burned into the picture (`--srt-file`, `--srt-burn`).
     #[serde(skip_serializing_if = "Option::is_none")]
     subtitle_burn_path: Option<String>,
+    /// When true, tagging strips inherited embedded cover on the **encoded output** only (never mutates source).
+    #[serde(default)]
+    omit_embedded_cover_on_output: bool,
     status: JobStatus,
     progress: Option<f32>,
     error: Option<String>,
@@ -132,7 +137,10 @@ pub(crate) fn resources_root(app: &AppHandle) -> Result<PathBuf, String> {
         .resource_dir()
         .map_err(|e| format!("resource_dir: {e}"))?;
 
-    if base.join("handbrake").is_dir() || base.join("presets").is_dir() {
+    if base.join("handbrake").is_dir()
+        || base.join("presets").is_dir()
+        || base.join("ffmpeg").is_dir()
+    {
         return Ok(base);
     }
 
@@ -140,7 +148,8 @@ pub(crate) fn resources_root(app: &AppHandle) -> Result<PathBuf, String> {
     if nested.is_dir()
         && (nested.join("handbrake").is_dir()
             || nested.join("atomicparsley").is_dir()
-            || nested.join("presets").is_dir())
+            || nested.join("presets").is_dir()
+            || nested.join("ffmpeg").is_dir())
     {
         return Ok(nested);
     }
@@ -190,9 +199,29 @@ fn pick_atomicparsley_version_line(text: &str) -> Option<String> {
 struct ToolVersions {
     handbrake_cli: Option<String>,
     atomic_parsley: Option<String>,
+    ffmpeg: Option<String>,
 }
 
-/// Runtime `--version` strings for the bundled HandBrake CLI and AtomicParsley (About dialog).
+fn pick_ffmpeg_version_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("ffmpeg version"))
+        .map(str::to_string)
+}
+
+fn read_ffmpeg_version_output(exe: &Path, cwd: Option<&Path>) -> Option<String> {
+    let mut cmd = Command::new(exe);
+    cmd.arg("-version");
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    let out = cmd.output().ok()?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    Some(format!("{stdout}{stderr}"))
+}
+
+/// Runtime `--version` strings for bundled CLIs (About dialog).
 #[tauri::command]
 fn get_tool_versions(app: AppHandle) -> Result<ToolVersions, String> {
     let handbrake_cli = handbrake_cli_and_workdir(&app).ok().and_then(|(exe, wd)| {
@@ -201,9 +230,13 @@ fn get_tool_versions(app: AppHandle) -> Result<ToolVersions, String> {
     let atomic_parsley = tagging::find_atomicparsley_executable(&app).ok().and_then(|exe| {
         read_cli_version_output(&exe, exe.parent()).and_then(|t| pick_atomicparsley_version_line(&t))
     });
+    let ffmpeg = ffmpeg_frame::find_ffmpeg(&app).ok().and_then(|exe| {
+        read_ffmpeg_version_output(&exe, exe.parent()).and_then(|t| pick_ffmpeg_version_line(&t))
+    });
     Ok(ToolVersions {
         handbrake_cli,
         atomic_parsley,
+        ffmpeg,
     })
 }
 
@@ -621,6 +654,8 @@ struct EnqueueTaggedItem {
     /// Burn-in `.srt` path from metadata wizard (optional).
     #[serde(default)]
     subtitle_burn_path: Option<String>,
+    #[serde(default)]
+    omit_embedded_cover_on_output: bool,
 }
 
 #[tauri::command]
@@ -671,6 +706,7 @@ fn enqueue_with_tags(
                 tags,
                 audio_track: item.audio_track,
                 subtitle_burn_path,
+                omit_embedded_cover_on_output: item.omit_embedded_cover_on_output,
                 status: JobStatus::Pending,
                 progress: None,
                 error: None,
@@ -759,17 +795,6 @@ fn probe_embedded_artwork(source_path: String) -> Result<embedded_artwork::Embed
         return Err("Not a file.".into());
     }
     Ok(embedded_artwork::probe(&p))
-}
-
-/// Strips all `covr` atoms in place (requires AtomicParsley).
-#[tauri::command]
-fn strip_embedded_artwork_from_file(app: AppHandle, source_path: String) -> Result<(), String> {
-    let p = PathBuf::from(source_path.trim());
-    if !p.is_file() {
-        return Err("Not a file.".into());
-    }
-    let exe = tagging::find_atomicparsley_executable(&app)?;
-    tagging::strip_embedded_artwork_atoms(&exe, &p)
 }
 
 /// Removes every job except one that is **encoding** (the active encode is left running).
@@ -895,6 +920,7 @@ fn enqueue(app: AppHandle, state: State<'_, AppState>, req: EnqueueRequest) -> R
                 tags: None,
                 audio_track,
                 subtitle_burn_path: None,
+                omit_embedded_cover_on_output: false,
                 status: JobStatus::Pending,
                 progress: None,
                 error: None,
@@ -1212,7 +1238,13 @@ fn run_one_job(app: AppHandle, state: AppState, job: Job, default_out: Option<Pa
                     None
                 };
             let art = art_temp.as_ref().map(|f| f.path());
-            tagging::run_atomicparsley(&exe, &out, tags, art)?;
+            tagging::run_atomicparsley(
+                &exe,
+                &out,
+                tags,
+                art,
+                job.omit_embedded_cover_on_output,
+            )?;
         }
 
         Ok(())
@@ -1224,14 +1256,19 @@ fn run_one_job(app: AppHandle, state: AppState, job: Job, default_out: Option<Pa
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
+            ffmpeg_frame::ffmpeg_available,
+            ffmpeg_frame::ffmpeg_probe_duration,
+            ffmpeg_frame::ffmpeg_extract_frame_base64,
+            musicbrainz::musicbrainz_http_get,
+            musicbrainz::musicbrainz_fetch_binary,
             probe_handbrake,
             probe_atomicparsley,
             get_tool_versions,
             probe_embedded_artwork,
-            strip_embedded_artwork_from_file,
             get_queue,
             get_settings,
             set_default_output_dir,

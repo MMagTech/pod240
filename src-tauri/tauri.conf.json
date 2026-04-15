@@ -36,7 +36,8 @@
     "resources": [
       "resources/presets",
       "resources/handbrake",
-      "resources/atomicparsley"
+      "resources/atomicparsley",
+      "resources/ffmpeg"
     ]
   }
 }

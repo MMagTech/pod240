@@ -1,5 +1,6 @@
 /**
- * Embedded cover art in source files (Lofty probe + AtomicParsley strip).
+ * Embedded cover art in source files (read-only probe for the metadata UI).
+ * Optional: omit that cover on the **encoded output** only (never modifies the source file).
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -18,8 +19,11 @@ export const EMBEDDED_ARTWORK_SECTION_HTML = `
           <div class="meta-embedded-art-row">
             <div id="meta-embedded-art-thumb" class="meta-embedded-art-thumb" aria-hidden="true"></div>
             <div class="meta-embedded-art-actions">
-              <button type="button" class="secondary" id="meta-embedded-art-remove">Remove…</button>
-              <p class="meta-tiny">Strips embedded cover art. Other tags are unchanged.</p>
+              <label class="meta-check-label meta-embedded-art-omit-label">
+                <input type="checkbox" id="meta-embedded-art-omit-output" />
+                Don't embed current cover on output
+              </label>
+              <p class="meta-tiny">Nondestructive to source file if chosen. Action applied to encoded file.</p>
             </div>
           </div>
         </div>`;
@@ -28,97 +32,39 @@ export async function probeEmbeddedArtwork(sourcePath: string): Promise<Embedded
   return invoke<EmbeddedArtworkProbeResult>("probe_embedded_artwork", { sourcePath });
 }
 
-export async function stripEmbeddedArtworkFromFile(sourcePath: string): Promise<void> {
-  await invoke("strip_embedded_artwork_from_file", { sourcePath });
-}
-
-/** Themed confirm above the metadata overlay (native dialogs don’t match app CSS). */
-function openRemoveEmbeddedArtConfirm(parentOverlay: HTMLElement): Promise<boolean> {
-  return new Promise((resolve) => {
-    const layer = document.createElement("div");
-    layer.className = "meta-confirm-overlay";
-    layer.setAttribute("role", "dialog");
-    layer.setAttribute("aria-modal", "true");
-    layer.setAttribute("aria-labelledby", "meta-embed-confirm-title");
-    layer.innerHTML = `
-      <div class="meta-panel meta-panel--confirm">
-        <h3 id="meta-embed-confirm-title" class="meta-confirm-title">Remove Embedded Artwork</h3>
-        <p class="meta-hint meta-confirm-msg">
-          Remove all embedded cover art? The video file on disk will be modified.
-        </p>
-        <div class="meta-actions">
-          <button type="button" class="secondary meta-embed-confirm-cancel">Cancel</button>
-          <div class="meta-actions-filler" aria-hidden="true"></div>
-          <button type="button" class="meta-embed-confirm-remove">Remove</button>
-        </div>
-      </div>`;
-    parentOverlay.appendChild(layer);
-
-    const cancelBtn = layer.querySelector(".meta-embed-confirm-cancel") as HTMLButtonElement;
-    const removeBtn = layer.querySelector(".meta-embed-confirm-remove") as HTMLButtonElement;
-
-    const finish = (v: boolean) => {
-      document.removeEventListener("keydown", onKey);
-      layer.remove();
-      resolve(v);
-    };
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      finish(false);
-    };
-
-    cancelBtn.addEventListener("click", () => finish(false));
-    removeBtn.addEventListener("click", () => finish(true));
-    layer.addEventListener("click", (e) => {
-      if (e.target === layer) finish(false);
-    });
-    document.addEventListener("keydown", onKey, true);
-    cancelBtn.focus();
-  });
-}
-
 /**
- * One-time setup per modal: loads embedded art for `sourcePath` and wires remove.
+ * One-time setup per modal: loads embedded art for `sourcePath` and wires omit-on-output checkbox.
  * For TV batch/orphans, pass `note` (e.g. first-file-only hint).
+ * `prefillOmitOnOutput`: restore checkbox when stepping back through the wizard.
  */
 export function initEmbeddedArtworkBlock(
   overlay: HTMLElement,
-  appendLog: (s: string) => void
+  _appendLog: (s: string) => void
 ): {
-  load: (sourcePath: string, note?: string) => Promise<void>;
+  load: (sourcePath: string, note?: string, prefillOmitOnOutput?: boolean) => Promise<void>;
+  getOmitEmbeddedCoverOnOutput: () => boolean;
 } {
   const panel = overlay.querySelector("#meta-embedded-art") as HTMLElement | null;
   const noteEl = overlay.querySelector("#meta-embedded-art-note") as HTMLElement | null;
   const thumb = overlay.querySelector("#meta-embedded-art-thumb") as HTMLElement | null;
-  const btn = overlay.querySelector("#meta-embedded-art-remove") as HTMLButtonElement | null;
-  if (!panel || !thumb || !btn) {
-    return { load: async () => {} };
+  const omitCb = overlay.querySelector("#meta-embedded-art-omit-output") as HTMLInputElement | null;
+  if (!panel || !thumb || !omitCb) {
+    return {
+      load: async () => {},
+      getOmitEmbeddedCoverOnOutput: () => false,
+    };
   }
 
   const artPanel = panel;
   const artThumb = thumb;
-  const artBtn = btn;
+  const omitCheckbox = omitCb;
 
-  let activePath = "";
-
-  artBtn.addEventListener("click", async () => {
-    if (!activePath) return;
-    const ok = await openRemoveEmbeddedArtConfirm(overlay);
-    if (!ok) return;
-    try {
-      await stripEmbeddedArtworkFromFile(activePath);
-      appendLog("Removed embedded artwork from source file.");
-      await load(activePath);
-    } catch (e) {
-      appendLog(String(e));
-    }
-  });
-
-  async function load(sourcePath: string, note?: string): Promise<void> {
-    activePath = sourcePath;
+  async function load(
+    sourcePath: string,
+    note?: string,
+    prefillOmitOnOutput?: boolean
+  ): Promise<void> {
+    omitCheckbox.checked = !!prefillOmitOnOutput;
     if (noteEl) {
       if (note) {
         noteEl.hidden = false;
@@ -138,12 +84,15 @@ export function initEmbeddedArtworkBlock(
       artPanel.hidden = false;
       const mime = r.mimeType || "image/jpeg";
       artThumb.innerHTML = `<img src="data:${mime};base64,${r.dataBase64}" alt="" />`;
-    } catch (e) {
+    } catch {
       artPanel.hidden = true;
       artThumb.replaceChildren();
-      appendLog(String(e));
     }
   }
 
-  return { load };
+  function getOmitEmbeddedCoverOnOutput(): boolean {
+    return omitCheckbox.checked;
+  }
+
+  return { load, getOmitEmbeddedCoverOnOutput };
 }

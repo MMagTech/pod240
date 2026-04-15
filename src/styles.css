@@ -21,15 +21,19 @@
   --font-ui-sm: 0.8125rem;
   --shadow-sm: 0 1px 2px color-mix(in srgb, #000 35%, transparent);
   --shadow-md: 0 4px 16px color-mix(in srgb, #000 40%, transparent);
+  /* Shared “lift” under buttons (matches queue pill depth) */
+  --btn-shadow-lift:
+    0 1px 2px color-mix(in srgb, #000 42%, transparent),
+    0 2px 6px color-mix(in srgb, #000 22%, transparent);
+  --btn-shadow-inset-highlight: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  --btn-shadow-primary: var(--btn-shadow-lift), var(--btn-shadow-inset-highlight);
   --btn-secondary-face: linear-gradient(
     180deg,
     color-mix(in srgb, var(--surface-elevated) 100%, #fff 8%),
     color-mix(in srgb, var(--surface-elevated) 78%, #07080a 22%)
   );
   --btn-secondary-border: color-mix(in srgb, var(--muted) 42%, #0a0c12 58%);
-  --btn-secondary-shadow:
-    0 1px 2px color-mix(in srgb, #000 38%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent);
+  --btn-secondary-shadow: var(--btn-shadow-lift), inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent);
   --transition: 150ms ease;
   font-family:
     system-ui,
@@ -347,9 +351,7 @@ button.meta-tmdb-fetch-btn {
   );
   color: #fff;
   border: 1px solid color-mix(in srgb, var(--accent) 70%, #0a0c12 30%);
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  box-shadow: var(--btn-shadow-primary);
 }
 
 button.meta-tmdb-fetch-btn:hover:not(:disabled) {
@@ -363,6 +365,34 @@ button.meta-tmdb-fetch-btn:hover:not(:disabled) {
 
 button.meta-tmdb-fetch-btn:active:not(:disabled) {
   filter: brightness(0.97);
+}
+
+/* Fetch Poster / Fetch Artwork: secondary face (tags fetch stays primary purple above). */
+button.secondary.meta-tmdb-fetch-btn {
+  background: var(--btn-secondary-face);
+  color: var(--text);
+  border: 1px solid var(--btn-secondary-border);
+  box-shadow: var(--btn-secondary-shadow);
+}
+
+button.secondary.meta-tmdb-fetch-btn:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-elevated) 100%, #fff 12%),
+    color-mix(in srgb, var(--surface-elevated) 72%, #07080a 28%)
+  );
+  border-color: color-mix(in srgb, var(--muted) 52%, transparent);
+  box-shadow:
+    var(--btn-shadow-lift),
+    0 2px 5px color-mix(in srgb, #000 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+}
+
+button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
+  filter: brightness(0.97);
+  box-shadow:
+    0 1px 1px color-mix(in srgb, #000 28%, transparent),
+    inset 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 }
 
 .meta-tmdb-fetch-help {
@@ -450,8 +480,19 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
   font-size: 0.86rem;
   line-height: 1.45;
   color: var(--muted);
-  white-space: pre-line;
   word-break: break-word;
+}
+
+.app-about-tool-ver-line {
+  margin: 0.2rem 0;
+}
+
+.app-about-tool-ver-line:first-child {
+  margin-top: 0;
+}
+
+.app-about-tool-ver-line:last-child {
+  margin-bottom: 0;
 }
 
 .app-help-body {
@@ -528,9 +569,7 @@ button.meta-tmdb-fetch-btn:active:not(:disabled) {
   );
   border: 1px solid color-mix(in srgb, var(--danger) 72%, #1a0505 28%);
   color: #fff;
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+  box-shadow: var(--btn-shadow-primary);
 }
 
 .meta-panel--confirm .meta-embed-confirm-remove:hover:not(:disabled) {
@@ -1103,6 +1142,98 @@ details[open] > .meta-optional-tags-summary::before {
   margin-top: 0.1rem;
 }
 
+/* MusicBrainz tiles: square cover art (CAA), same grid as TMDB posters */
+.meta-tmdb-pick.meta-mb-pick img,
+.meta-tmdb-pick.meta-mb-pick .meta-mb-pick-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+}
+
+.meta-mb-pick-placeholder {
+  min-height: 2.5rem;
+}
+
+.meta-mb-picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.meta-mb-pick-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-ui-sm);
+  line-height: 1.35;
+}
+
+.meta-mb-pick-line1 {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.meta-mb-pick-line2 {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.meta-mb-pick-btn--selected {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+/* Music video: frame grabber for artwork */
+.meta-mv-frame-section {
+  margin-top: 0.75rem;
+}
+
+.meta-mv-frame-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 0.35rem;
+}
+
+.meta-mv-frame-canvas {
+  display: block;
+  width: 168px;
+  max-width: 46%;
+  height: auto;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 70%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.meta-mv-frame-controls {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.meta-mv-frame-slider {
+  width: 100%;
+  margin: 0;
+}
+
+.meta-mv-frame-time {
+  margin: 0;
+}
+
+.meta-mv-frame-video {
+  display: none;
+}
+
 .meta-tiny {
   margin: 0;
   font-size: 0.72rem;
@@ -1275,9 +1406,7 @@ button {
     var(--accent)
   );
   color: #fff;
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  box-shadow: var(--btn-shadow-primary);
   transition:
     background var(--transition),
     border-color var(--transition),
@@ -1288,8 +1417,7 @@ button {
 button:focus-visible {
   outline: none;
   box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent),
+    var(--btn-shadow-primary),
     0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
@@ -1300,6 +1428,10 @@ button:hover:not(:disabled) {
     var(--accent-hover)
   );
   border-color: color-mix(in srgb, var(--accent-hover) 75%, #0a0c12 25%);
+  box-shadow:
+    var(--btn-shadow-lift),
+    0 3px 10px color-mix(in srgb, #000 18%, transparent),
+    var(--btn-shadow-inset-highlight);
 }
 
 button:active:not(:disabled) {
@@ -1321,7 +1453,8 @@ button.secondary:hover:not(:disabled) {
   );
   border-color: color-mix(in srgb, var(--muted) 52%, transparent);
   box-shadow:
-    0 2px 4px color-mix(in srgb, #000 22%, transparent),
+    var(--btn-shadow-lift),
+    0 2px 5px color-mix(in srgb, #000 16%, transparent),
     inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
 }
 
@@ -1448,9 +1581,7 @@ button:disabled {
     var(--danger)
   );
   border: 1px solid color-mix(in srgb, var(--danger) 72%, #1a0505 28%);
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+  box-shadow: var(--btn-shadow-primary);
 }
 
 .queue-actions #btn-cancel:hover:not(:disabled) {
@@ -1464,8 +1595,7 @@ button:disabled {
 
 .queue-actions #btn-cancel:focus-visible {
   box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
+    var(--btn-shadow-primary),
     0 0 0 3px color-mix(in srgb, var(--danger) 38%, transparent);
 }
 
@@ -1512,10 +1642,11 @@ body.queue-reordering {
 }
 
 .queue-list li {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.65rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.75rem;
+  row-gap: 0;
   padding: 0.65rem 1rem;
   font-size: var(--font-ui);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -1531,7 +1662,6 @@ body.queue-reordering {
 }
 
 .queue-drag {
-  flex: 0 0 auto;
   width: 1.25rem;
   text-align: center;
   font-size: 0.75rem;
@@ -1539,8 +1669,8 @@ body.queue-reordering {
   color: var(--muted);
   cursor: grab;
   user-select: none;
-  align-self: center;
-  padding-top: 0.15rem;
+  align-self: start;
+  padding-top: 0.28rem;
 }
 
 .queue-drag:not(.queue-drag--inactive) {
@@ -1567,11 +1697,19 @@ body.queue-reordering {
 }
 
 .queue-item-main {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
+}
+
+.queue-item-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  padding-top: 0.05rem;
 }
 
 .queue-list .queue-item-main .name {
@@ -1585,32 +1723,86 @@ body.queue-reordering {
 
 .queue-sub {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.65rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
   font-size: 0.78rem;
   color: var(--muted);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .queue-sub-meta {
-  flex: 1 1 8rem;
   min-width: 0;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .queue-sub-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
   align-items: center;
+  align-self: flex-start;
 }
 
-.queue-sub-btn {
-  min-height: 1.75rem;
-  padding: 0.12rem 0.5rem;
-  font-size: 0.76rem;
+/* Queue-only: SRT… / Clear — compact colored pills, white label text */
+.queue-list .queue-sub-actions button.queue-sub-btn {
+  min-height: unset;
+  padding: 0.2rem 0.55rem;
+  font-size: var(--font-ui-sm);
   font-weight: 500;
+  line-height: 1.25;
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: var(--btn-shadow-primary);
+  color: #fff;
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn--pick {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 92%, #fff 8%),
+    color-mix(in srgb, var(--accent) 78%, #120a1c 22%)
+  );
+  border-color: color-mix(in srgb, var(--accent) 55%, #0a0610);
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn--pick:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn--clear {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #4299e1 88%, #fff 12%),
+    color-mix(in srgb, #2b6cb0 90%, #0d1f33 10%)
+  );
+  border-color: color-mix(in srgb, #2b6cb0 70%, #0a1624);
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn--clear:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-shadow-primary),
+    0 0 0 2px color-mix(in srgb, #fff 45%, transparent);
+}
+
+.queue-list .queue-sub-actions button.queue-sub-btn:active:not(:disabled) {
+  filter: brightness(0.94);
+  box-shadow:
+    0 1px 1px color-mix(in srgb, #000 38%, transparent),
+    inset 0 1px 3px color-mix(in srgb, #000 28%, transparent);
 }
 
 .meta-sub-burn-section .meta-check-label {
@@ -1652,8 +1844,7 @@ body.queue-reordering {
   border-radius: 999px;
   text-transform: capitalize;
   flex-shrink: 0;
-  align-self: center;
-  max-width: 11rem;
+  white-space: nowrap;
   text-align: center;
 }
 
@@ -1671,40 +1862,87 @@ body.queue-reordering {
   background: color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
-.remove-btn {
-  min-height: var(--control-height);
-  padding: 0 calc(var(--control-pad-x) * 0.85);
-  font-size: var(--font-ui);
-  font-weight: 500;
-  background: var(--btn-secondary-face);
-  color: var(--muted);
-  border: 1px solid var(--btn-secondary-border);
-  box-shadow: var(--btn-secondary-shadow);
-  flex-shrink: 0;
-  align-self: center;
+/* Queue status chips: saturated fills + white text (queue list only) */
+.queue-list .status {
+  color: #fff;
+  text-shadow: 0 1px 1px color-mix(in srgb, #000 28%, transparent);
 }
 
-.remove-btn:hover:not(:disabled) {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 42%, var(--btn-secondary-border));
+.queue-list .status.pending {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--danger) 14%, var(--surface-elevated)),
-    color-mix(in srgb, var(--danger) 22%, color-mix(in srgb, var(--surface-elevated) 82%, #07080a 18%))
+    color-mix(in srgb, var(--accent) 92%, #fff 8%),
+    color-mix(in srgb, var(--accent) 78%, #120a1c 22%)
   );
-  box-shadow:
-    0 2px 4px color-mix(in srgb, #000 20%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, #0a0610);
 }
 
-.remove-btn:focus-visible {
-  box-shadow:
-    var(--btn-secondary-shadow),
-    0 0 0 3px color-mix(in srgb, var(--danger) 30%, transparent);
+.queue-list .status.encoding {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-hover) 88%, #fff 12%),
+    color-mix(in srgb, var(--accent) 82%, #1a0f28 18%)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, #0a0610);
 }
 
-.remove-btn:active:not(:disabled) {
-  filter: brightness(0.97);
+.queue-list .status.done {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ok) 88%, #fff 8%),
+    color-mix(in srgb, #276749 92%, #0d1f14 8%)
+  );
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, #0a1f14);
+}
+
+.queue-list .status.failed,
+.queue-list .status.cancelled {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 88%, #fff 6%),
+    color-mix(in srgb, #c53030 90%, #2a0a0a 10%)
+  );
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, #2a0a0a);
+}
+
+/* Queue-only: Remove — red pill, white text */
+.queue-list .queue-item-aside button.remove-btn {
+  min-height: unset;
+  padding: 0.2rem 0.6rem;
+  font-size: var(--font-ui-sm);
+  font-weight: 500;
+  line-height: 1.25;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, #3a1010);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 92%, #fff 8%),
+    color-mix(in srgb, #c53030 88%, #2a0a0a 12%)
+  );
+  box-shadow: var(--btn-shadow-primary);
+  color: #fff;
+  text-shadow: 0 1px 1px color-mix(in srgb, #000 30%, transparent);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.queue-list .queue-item-aside button.remove-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  border-color: color-mix(in srgb, var(--danger) 65%, #2a0a0a);
+}
+
+.queue-list .queue-item-aside button.remove-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-shadow-primary),
+    0 0 0 2px color-mix(in srgb, #fff 40%, transparent);
+}
+
+.queue-list .queue-item-aside button.remove-btn:active:not(:disabled) {
+  filter: brightness(0.94);
+  box-shadow:
+    0 1px 1px color-mix(in srgb, #000 38%, transparent),
+    inset 0 1px 3px color-mix(in srgb, #000 28%, transparent);
 }
 
 .log-details {

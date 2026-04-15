@@ -11,7 +11,14 @@ import {
   readCommonTagFields,
   type CommonTagFields,
 } from "./metadata-common";
-import { parseFilenameMetadataHints } from "./filename-metadata-hints";
+import { parseFilenameMetadataHints, parseMusicVideoArtistTitle } from "./filename-metadata-hints";
+import {
+  clearMusicBrainzPicker,
+  fetchRecordingTagsAsGenre,
+  mountMusicBrainzRecordingPicker,
+  searchMusicBrainzRecordings,
+  type MbRecordingCandidate,
+} from "./musicbrainz-metadata";
 import {
   enrichWithTvEpisodeTitle,
   fetchTmdbDetailsById,
@@ -27,6 +34,7 @@ import {
   type TmdbSearchMode,
 } from "./tmdb-posters";
 import { EMBEDDED_ARTWORK_SECTION_HTML, initEmbeddedArtworkBlock } from "./embedded-artwork-ui";
+import { wireMusicVideoFramePicker } from "./music-video-frame-ui";
 
 const META_ART_FILENAME_EMPTY = "No Image Selected";
 
@@ -103,6 +111,8 @@ export interface EnqueueTaggedItemPayload {
   audioTrack?: number;
   /** Absolute path to `.srt` for HandBrake burn-in when user opted in (metadata step). */
   subtitleBurnPath?: string;
+  /** Strip inherited embedded cover on the encoded file only (never modifies the source). */
+  omitEmbeddedCoverOnOutput?: boolean;
 }
 
 export type SingleFileMetadataResult =
@@ -262,9 +272,11 @@ function applyEnqueueItemToSingleFileForm(
   const secMv = overlay.querySelector("#meta-mv") as HTMLDivElement;
   const secCommon = overlay.querySelector("#meta-common-wrap") as HTMLElement | null;
   const secArt = overlay.querySelector("#meta-art") as HTMLDivElement | null;
+  const mvFrameSection = overlay.querySelector("#meta-mv-frame-section") as HTMLElement | null;
   secMovie.hidden = kind !== "movie";
   secTvSingle.hidden = kind !== "tv";
   secMv.hidden = kind !== "musicVideo";
+  if (mvFrameSection) mvFrameSection.hidden = kind !== "musicVideo";
   if (secCommon) secCommon.hidden = kind === "skip";
   if (secArt) secArt.hidden = kind === "skip";
   return kind;
@@ -403,6 +415,19 @@ export function promptSingleFileMetadata(
             <input type="checkbox" id="mvv-cpil" /> Compilation
           </label>
         </div>
+        <div id="meta-musicbrainz-tags-section" class="meta-section meta-musicbrainz-tags-section" hidden>
+          <p class="meta-section-label">Tags from MusicBrainz</p>
+          <div id="meta-musicbrainz-tags-block" class="meta-tmdb-fetch-block">
+            <div class="meta-tmdb-row">
+              <button type="button" id="meta-mb-tags-fetch" class="meta-tmdb-fetch-btn">Fetch Tags from MusicBrainz</button>
+            </div>
+            <div class="meta-tmdb-fetch-help">
+              <p class="meta-tiny">Fetches Artist, Year and Genre from MusicBrainz</p>
+              <p id="meta-mb-tags-picks-heading" class="meta-tiny" hidden>Choose a Match Below</p>
+            </div>
+            <div id="meta-mb-tags-picks" class="meta-tmdb-picks" hidden></div>
+          </div>
+        </div>
         <div id="meta-tmdb-tags-section" class="meta-section meta-tmdb-tags-section" hidden>
           <p class="meta-section-label">Tags from TMDB</p>
           <div id="meta-tmdb-tags-block" class="meta-tmdb-fetch-block" hidden>
@@ -442,10 +467,10 @@ export function promptSingleFileMetadata(
         </details>
         ${EMBEDDED_ARTWORK_SECTION_HTML}
         <div id="meta-art" class="meta-section">
-          <label class="meta-file-label" for="meta-art-file">Artwork (Optional)</label>
+          <label class="meta-file-label" for="meta-art-file">Cover (Optional)</label>
           <div class="meta-file-row">
             <input type="file" id="meta-art-file" class="meta-art-file-input" tabindex="-1" accept="image/jpeg,image/png,image/webp" />
-            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select artwork image">Select…</button>
+            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select cover image">Select…</button>
             <span id="meta-art-filename" class="meta-file-filename" aria-live="polite">No Image Selected</span>
           </div>
           <p id="meta-tmdb-menu-hint" class="meta-tiny meta-tmdb-menu-hint" hidden>
@@ -461,6 +486,38 @@ export function promptSingleFileMetadata(
             </div>
             <div id="meta-tmdb-art-picks" class="meta-tmdb-picks" hidden></div>
           </div>
+          <div id="meta-mv-frame-section" class="meta-section meta-mv-frame-section" hidden>
+            <p class="meta-section-label">Frame From Video</p>
+            <div class="meta-mv-frame-row">
+              <canvas id="meta-mv-frame-canvas" class="meta-mv-frame-canvas" width="1" height="1"></canvas>
+              <div class="meta-mv-frame-controls">
+                <input
+                  type="range"
+                  id="meta-mv-frame-slider"
+                  class="meta-mv-frame-slider"
+                  min="0"
+                  max="1000"
+                  value="0"
+                  step="1"
+                  disabled
+                  aria-label="Scrub video time for cover frame"
+                />
+                <div class="meta-mv-frame-time meta-tiny">
+                  <span id="meta-mv-frame-time">0:00</span> / <span id="meta-mv-frame-duration">0:00</span>
+                </div>
+                <button type="button" class="secondary" id="meta-mv-frame-use" disabled>Use This Frame</button>
+              </div>
+            </div>
+            <video
+              id="meta-mv-frame-video"
+              class="meta-mv-frame-video"
+              playsinline
+              muted
+              preload="metadata"
+              hidden
+            ></video>
+            <p class="meta-tiny">Scrub to a frame to use as the Cover</p>
+          </div>
           <div id="meta-art-preview" class="meta-art-preview" hidden></div>
         </div>
         <div class="meta-actions">
@@ -475,7 +532,6 @@ export function promptSingleFileMetadata(
     modalHost.appendChild(overlay);
 
     const embeddedArt = initEmbeddedArtworkBlock(overlay, appendLog);
-    void embeddedArt.load(file.sourcePath);
 
     let artworkBase64: string | undefined;
 
@@ -511,6 +567,17 @@ export function promptSingleFileMetadata(
     const tmdbArtPicks = overlay.querySelector("#meta-tmdb-art-picks") as HTMLDivElement;
     const tmdbArtPicksHeading = overlay.querySelector("#meta-tmdb-art-picks-heading") as HTMLElement;
     const tmdbArtFetch = overlay.querySelector("#meta-tmdb-art-fetch") as HTMLButtonElement;
+    const metaMusicBrainzTagsSection = overlay.querySelector("#meta-musicbrainz-tags-section") as HTMLElement;
+    const mbTagsFetch = overlay.querySelector("#meta-mb-tags-fetch") as HTMLButtonElement;
+    const mbTagsPicks = overlay.querySelector("#meta-mb-tags-picks") as HTMLDivElement;
+    const mbTagsPicksHeading = overlay.querySelector("#meta-mb-tags-picks-heading") as HTMLElement;
+    const mvFrameSection = overlay.querySelector("#meta-mv-frame-section") as HTMLElement;
+    const mvFrameVideo = overlay.querySelector("#meta-mv-frame-video") as HTMLVideoElement;
+    const mvFrameCanvas = overlay.querySelector("#meta-mv-frame-canvas") as HTMLCanvasElement;
+    const mvFrameSlider = overlay.querySelector("#meta-mv-frame-slider") as HTMLInputElement;
+    const mvFrameTime = overlay.querySelector("#meta-mv-frame-time") as HTMLElement;
+    const mvFrameDuration = overlay.querySelector("#meta-mv-frame-duration") as HTMLElement;
+    const mvFrameUse = overlay.querySelector("#meta-mv-frame-use") as HTMLButtonElement;
 
     const secMovie = overlay.querySelector("#meta-movie") as HTMLDivElement;
     const secTvSingle = overlay.querySelector("#meta-tv-single") as HTMLDivElement;
@@ -554,10 +621,72 @@ export function promptSingleFileMetadata(
         tvEp.value = String(h.episode ?? 1);
       }
       if (h.episodeTitle) tvEtitle.value = h.episodeTitle;
-      mvvSong.value = st;
+      const mvParts = parseMusicVideoArtistTitle(st);
+      mvvSong.value = mvParts.title || st;
+      mvvArtist.value = mvParts.artist;
     }
 
+    void embeddedArt.load(
+      file.sourcePath,
+      undefined,
+      prefillItem?.omitEmbeddedCoverOnOutput
+    );
+
     let priorKind: typeof kind = kind;
+
+    async function applyMbCandidate(c: MbRecordingCandidate): Promise<void> {
+      mvvSong.value = c.title;
+      mvvArtist.value = c.artistDisplay;
+      mvvAlbum.value = c.albumTitle;
+      if (c.year != null) {
+        applyCommonTagFields(overlay, "meta-common", { releaseDate: String(c.year) });
+      }
+      try {
+        const genre = await fetchRecordingTagsAsGenre(c.recordingMbid, c.releaseMbid);
+        if (genre) mvvGenre.value = genre;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    async function runMbSearch(): Promise<MbRecordingCandidate[] | null> {
+      const artist = mvvArtist.value.trim();
+      const title = mvvSong.value.trim();
+      if (!title) {
+        appendLog("Enter a song title (and artist if known) first.");
+        return null;
+      }
+      try {
+        return await searchMusicBrainzRecordings(artist, title);
+      } catch (e) {
+        appendLog(`MusicBrainz: ${String(e)}`);
+        return null;
+      }
+    }
+
+    function applyFrameFromVideo(jpegBase64: string): void {
+      clearManualArtFilePick(artFile, artFilename);
+      clearTmdbPosterPicker(tmdbArtPicks, tmdbArtPicksHeading);
+      clearTmdbPosterPicker(tmdbTagsPicks, tmdbTagsPicksHeading);
+      clearMusicBrainzPicker(mbTagsPicks, mbTagsPicksHeading);
+      artworkBase64 = jpegBase64;
+      artPreview.hidden = false;
+      artPreview.innerHTML = `<img src="data:image/jpeg;base64,${jpegBase64}" alt="" />`;
+      appendLog("Cover: frame from video.");
+    }
+
+    const framePicker = wireMusicVideoFramePicker(
+      {
+        video: mvFrameVideo,
+        canvas: mvFrameCanvas,
+        slider: mvFrameSlider,
+        timeCurrent: mvFrameTime,
+        timeDuration: mvFrameDuration,
+        useBtn: mvFrameUse,
+      },
+      applyFrameFromVideo,
+      appendLog
+    );
 
     const subInclude = overlay.querySelector("#meta-sub-include") as HTMLInputElement;
     const subLabel = overlay.querySelector("#meta-sub-label") as HTMLElement;
@@ -607,9 +736,13 @@ export function promptSingleFileMetadata(
         tmdbTagsSection.hidden = !showTmdb;
         tmdbTagsBlock.hidden = !showTmdb;
         tmdbArtBlock.hidden = !showTmdb;
+        metaMusicBrainzTagsSection.hidden = sk || !mv;
         if (mv || sk) {
           clearTmdbPosterPicker(tmdbArtPicks, tmdbArtPicksHeading);
           clearTmdbPosterPicker(tmdbTagsPicks, tmdbTagsPicksHeading);
+        }
+        if (!mv) {
+          clearMusicBrainzPicker(mbTagsPicks, mbTagsPicksHeading);
         }
       });
     }
@@ -626,16 +759,22 @@ export function promptSingleFileMetadata(
       secMovie.hidden = kind !== "movie";
       secTvSingle.hidden = kind !== "tv";
       secMv.hidden = kind !== "musicVideo";
+      mvFrameSection.hidden = kind !== "musicVideo";
+      if (kind === "musicVideo") {
+        framePicker.load(file.sourcePath);
+      } else {
+        framePicker.unload();
+      }
       if (secCommon) secCommon.hidden = kind === "skip";
       if (secArt) secArt.hidden = kind === "skip";
       const compRow = overlay.querySelector("#meta-common-composer-row") as HTMLElement | null;
       if (compRow) compRow.hidden = kind !== "musicVideo";
       const subWrap = overlay.querySelector("#meta-sub-wrap") as HTMLDetailsElement | null;
       if (subWrap) {
-        subWrap.hidden = kind === "skip";
+        subWrap.hidden = kind === "skip" || kind === "musicVideo";
         if (kind === "tv") {
           subWrap.open = true;
-        } else if ((kind === "movie" || kind === "musicVideo") && priorKind === "tv") {
+        } else if (kind === "movie" && priorKind === "tv") {
           subWrap.open = false;
         }
       }
@@ -660,6 +799,7 @@ export function promptSingleFileMetadata(
         artworkBase64 = await fileToBase64(f);
         clearTmdbPosterPicker(tmdbArtPicks, tmdbArtPicksHeading);
         clearTmdbPosterPicker(tmdbTagsPicks, tmdbTagsPicksHeading);
+        clearMusicBrainzPicker(mbTagsPicks, mbTagsPicksHeading);
         artPreview.hidden = false;
         artPreview.innerHTML = `<img src="data:${f.type};base64,${artworkBase64}" alt="" />`;
       } catch (e) {
@@ -667,6 +807,36 @@ export function promptSingleFileMetadata(
       }
     });
     syncMetaArtFilenameDisplay(artFile, artFilename);
+
+    mbTagsFetch.addEventListener("click", async () => {
+      if (kind !== "musicVideo") return;
+      mbTagsFetch.disabled = true;
+      clearMusicBrainzPicker(mbTagsPicks, mbTagsPicksHeading);
+      try {
+        const list = await runMbSearch();
+        if (!list || list.length === 0) {
+          appendLog("MusicBrainz: no recordings found.");
+          return;
+        }
+        if (list.length === 1) {
+          await applyMbCandidate(list[0]!);
+          appendLog("MusicBrainz: tags applied.");
+          return;
+        }
+        mountMusicBrainzRecordingPicker(
+          mbTagsPicks,
+          list,
+          async (c) => {
+            await applyMbCandidate(c);
+            appendLog(`MusicBrainz: tags — ${c.title}.`);
+          },
+          mbTagsPicksHeading
+        );
+        appendLog("MusicBrainz: choose a match below.");
+      } finally {
+        mbTagsFetch.disabled = false;
+      }
+    });
 
     tmdbArtFetch.addEventListener("click", async () => {
       const key = await getStoredTmdbApiKey();
@@ -892,6 +1062,7 @@ export function promptSingleFileMetadata(
         resultType: v.type,
       });
       // #endregion
+      framePicker.unload();
       removeAll();
       modalHost.innerHTML = "";
       resolve(v);
@@ -916,11 +1087,20 @@ export function promptSingleFileMetadata(
     });
 
     overlay.querySelector("#meta-ok")!.addEventListener("click", () => {
-      if (subInclude.checked && !burnSubPath) {
+      if (
+        (kind === "movie" || kind === "tv") &&
+        subInclude.checked &&
+        !burnSubPath
+      ) {
         appendLog("Choose a .srt file for burn-in, or turn off burned-in subtitles.");
         return;
       }
-      const subBurn = subInclude.checked && burnSubPath ? burnSubPath : undefined;
+      const subBurn =
+        kind === "musicVideo"
+          ? undefined
+          : subInclude.checked && burnSubPath
+            ? burnSubPath
+            : undefined;
 
       if (kind === "skip") {
         cleanup(
@@ -937,6 +1117,9 @@ export function promptSingleFileMetadata(
         );
         return;
       }
+
+      const omitOut =
+        embeddedArt.getOmitEmbeddedCoverOnOutput() ? ({ omitEmbeddedCoverOnOutput: true } as const) : {};
 
       const art = artworkBase64;
 
@@ -967,6 +1150,7 @@ export function promptSingleFileMetadata(
                 ...common,
               },
               ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+              ...omitOut,
             },
           },
           "ok_movie"
@@ -994,6 +1178,7 @@ export function promptSingleFileMetadata(
                 ...common,
               },
               ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+              ...omitOut,
             },
           },
           "ok_tv"
@@ -1018,7 +1203,7 @@ export function promptSingleFileMetadata(
               compilation: mvvCpil.checked ? true : undefined,
               ...common,
             },
-            ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+            ...omitOut,
           },
         },
         "ok_musicVideo"
@@ -1077,7 +1262,7 @@ export function promptTvSeasonGroupBatch(
     overlay.className = "meta-overlay";
     const hint = stepHint
       ? `<p class="meta-hint">${stepHint}</p>`
-      : `<p class="meta-hint">One season — shared show name and artwork. Episode numbers are per file.</p>`;
+      : `<p class="meta-hint">One season — shared show name and cover. Episode numbers are per file.</p>`;
 
     overlay.innerHTML = `
       <div class="meta-panel meta-tv-batch-panel" role="dialog" aria-modal="true" aria-labelledby="meta-tvb-title">
@@ -1121,10 +1306,10 @@ export function promptTvSeasonGroupBatch(
           </tr></thead><tbody></tbody></table>
         </div>
         <div id="meta-art" class="meta-section">
-          <label class="meta-file-label" for="meta-art-file">Artwork (Optional)</label>
+          <label class="meta-file-label" for="meta-art-file">Cover (Optional)</label>
           <div class="meta-file-row">
             <input type="file" id="meta-art-file" class="meta-art-file-input" tabindex="-1" accept="image/jpeg,image/png,image/webp" />
-            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select artwork image">Select…</button>
+            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select cover image">Select…</button>
             <span id="meta-art-filename" class="meta-file-filename" aria-live="polite">No Image Selected</span>
           </div>
           <p id="meta-tmdb-menu-hint" class="meta-tiny meta-tmdb-menu-hint" hidden>
@@ -1154,12 +1339,6 @@ export function promptTvSeasonGroupBatch(
     modalHost.appendChild(overlay);
 
     const embeddedArt = initEmbeddedArtworkBlock(overlay, appendLog);
-    if (files[0]) {
-      void embeddedArt.load(
-        files[0].sourcePath,
-        `Preview uses the first file only (${basename(files[0].sourcePath)}). Other rows may have different embedded art.`
-      );
-    }
 
     let artworkBase64: string | undefined;
     const tvBackBtn = overlay.querySelector("#meta-back-tv") as HTMLButtonElement;
@@ -1299,6 +1478,14 @@ export function promptTvSeasonGroupBatch(
       const h = batchStemHints;
       const st = stem(files[0].sourcePath);
       tvBatchShow.value = h?.displayTitle || files[0].parse.inferredShow || st;
+    }
+
+    if (files[0]) {
+      void embeddedArt.load(
+        files[0].sourcePath,
+        `Preview uses the first file only (${basename(files[0].sourcePath)}). Other rows may have different embedded art.`,
+        prefItems?.[0]?.omitEmbeddedCoverOnOutput
+      );
     }
 
     void (async () => {
@@ -1539,6 +1726,8 @@ export function promptTvSeasonGroupBatch(
       if (gBatch) common.genre = gBatch;
       const net = tvBatchNet.value.trim() || undefined;
       const sortShow = tvBatchSorts.value.trim() || undefined;
+      const omitOut =
+        embeddedArt.getOmitEmbeddedCoverOnOutput() ? ({ omitEmbeddedCoverOnOutput: true } as const) : {};
       const items: EnqueueTaggedItemPayload[] = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i]!;
@@ -1569,6 +1758,7 @@ export function promptTvSeasonGroupBatch(
             ...common,
           },
           ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+          ...omitOut,
         });
       }
       cleanup({ type: "tagged", items }, "ok_confirm");
@@ -1644,10 +1834,10 @@ export function promptTvUnparsedOrphans(
           </tr></thead><tbody></tbody></table>
         </div>
         <div id="meta-art" class="meta-section">
-          <label class="meta-file-label" for="meta-art-file">Artwork (Optional)</label>
+          <label class="meta-file-label" for="meta-art-file">Cover (Optional)</label>
           <div class="meta-file-row">
             <input type="file" id="meta-art-file" class="meta-art-file-input" tabindex="-1" accept="image/jpeg,image/png,image/webp" />
-            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select artwork image">Select…</button>
+            <button type="button" class="secondary meta-art-file-pick" id="meta-art-file-pick" aria-label="Select cover image">Select…</button>
             <span id="meta-art-filename" class="meta-file-filename" aria-live="polite">No Image Selected</span>
           </div>
           <p id="meta-tmdb-menu-hint" class="meta-tiny meta-tmdb-menu-hint" hidden>
@@ -1677,12 +1867,6 @@ export function promptTvUnparsedOrphans(
     modalHost.appendChild(overlay);
 
     const embeddedArt = initEmbeddedArtworkBlock(overlay, appendLog);
-    if (files[0]) {
-      void embeddedArt.load(
-        files[0].sourcePath,
-        `Preview uses the first file only (${basename(files[0].sourcePath)}). Other rows may have different embedded art.`
-      );
-    }
 
     let artworkBase64: string | undefined;
     const orphBackBtn = overlay.querySelector("#meta-back-orph") as HTMLButtonElement;
@@ -1821,6 +2005,14 @@ export function promptTvUnparsedOrphans(
       const h = orphStemHints;
       const st = stem(files[0].sourcePath);
       tvOrphShow.value = h?.displayTitle || files[0].parse.inferredShow || st;
+    }
+
+    if (files[0]) {
+      void embeddedArt.load(
+        files[0].sourcePath,
+        `Preview uses the first file only (${basename(files[0].sourcePath)}). Other rows may have different embedded art.`,
+        prefOr?.[0]?.omitEmbeddedCoverOnOutput
+      );
     }
 
     void (async () => {
@@ -2056,6 +2248,8 @@ export function promptTvUnparsedOrphans(
       if (gOrph) common.genre = gOrph;
       const net = tvOrphNet.value.trim() || undefined;
       const sortShow = tvOrphSorts.value.trim() || undefined;
+      const omitOut =
+        embeddedArt.getOmitEmbeddedCoverOnOutput() ? ({ omitEmbeddedCoverOnOutput: true } as const) : {};
       const items: EnqueueTaggedItemPayload[] = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i]!;
@@ -2092,6 +2286,7 @@ export function promptTvUnparsedOrphans(
             ...common,
           },
           ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+          ...omitOut,
         });
       }
       cleanup({ type: "tagged", items }, "ok_confirm");
