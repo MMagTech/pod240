@@ -1,7 +1,9 @@
-FFmpeg (optional — music video “Frame from video” when the in-app player cannot decode your file)
-================================================================================================
+FFmpeg — music video “Frame from video” when the in-app player cannot decode your file
+======================================================================================
 
-For `tauri dev`, put binaries in this repo folder: `src-tauri/resources/ffmpeg/`
+**Release / packaged builds:** `ffmpeg` and `ffprobe` are bundled under the app’s **`resources/ffmpeg/`** folder (see `tauri.conf.json`). End users normally do nothing.
+
+**Development:** For `tauri dev`, put the same binaries in this repo folder: `src-tauri/resources/ffmpeg/`
 (packaged builds resolve the same path under bundled `resources/ffmpeg/`).
 
 Place the platform binaries in this folder next to each other:

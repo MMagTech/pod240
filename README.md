@@ -16,7 +16,7 @@ Release installers are **not** code-signed. **Windows** may show **SmartScreen**
 
 - **Encoding:** HandBrake CLI with the bundled **Olsro 240p30** preset (see [THIRD_PARTY.md](THIRD_PARTY.md) for licenses and components).
 - **Tags:** AtomicParsley is used when you add **metadata** in the app (iTunes-style tags on the finished `.mp4`).
-- **FFmpeg (optional):** Not required for basic conversion. If you place `ffmpeg` and `ffprobe` in the app’s **`resources/ffmpeg`** folder (a README there explains typical layouts), Pod240 can use them for **music video frame capture** and preview when the built-in player cannot decode a file. You can also point the **`POD240_FFMPEG`** environment variable at that folder or at `ffmpeg` directly.
+- **FFmpeg:** Shipped **next to the app** under **`resources/ffmpeg`** (`ffmpeg` + `ffprobe`). Pod240 uses them for **music video “Frame from video”** and preview scrubbing when the built-in player cannot decode a file—they are **not** used for the main HandBrake encode. Release installs include these binaries; if you build from source and the folder is empty, copy them in as described in **`resources/ffmpeg/README.txt`**, or set **`POD240_FFMPEG`** to that folder or to `ffmpeg` directly.
 
 ## Using Pod240
 

@@ -19,6 +19,8 @@ Pod240 is a **Tauri 2** desktop app. This document is for **building from source
 
    HandBrake is **GPLv2** — see [THIRD_PARTY.md](THIRD_PARTY.md).
 
+3. **FFmpeg** and **ffprobe** for music-video frame preview: keep them in **`src-tauri/resources/ffmpeg/`** (same layout as shipped **`resources/ffmpeg`**). They are **bundled with release builds** and **committed for Windows** in this repo; `npm run vendor:release` does **not** download them—copy from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) / [evermeet.cx](https://evermeet.cx/ffmpeg/) per [`resources/ffmpeg/README.txt`](src-tauri/resources/ffmpeg/README.txt) if your checkout is missing them (e.g. macOS CI). Override at runtime with **`POD240_FFMPEG`** if needed.
+
 ## Run in development
 
 ```bash
@@ -44,7 +46,7 @@ DRM-protected store purchases cannot be converted.
 
 ## GitHub releases (CI)
 
-Official **Windows** and **macOS** installers are built in [GitHub Actions](.github/workflows/release.yml) when you push a **version tag**. Each build vendors **HandBrake CLI** and **AtomicParsley** into the app so end users do **not** install those tools separately.
+Official **Windows** and **macOS** installers are built in [GitHub Actions](.github/workflows/release.yml) when you push a **version tag**. Each build vendors **HandBrake CLI** and **AtomicParsley** into the app, and bundles **FFmpeg/ffprobe** from `resources/ffmpeg` when present, so end users do **not** install those tools separately.
 
 ### Publish a version
 

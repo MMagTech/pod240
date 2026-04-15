@@ -148,7 +148,7 @@ export function wireMusicVideoFramePicker(
     const ok = await invoke<boolean>("ffmpeg_available").catch(() => false);
     if (!ok) {
       appendLog(
-        `Frame from video: ${reason} Add ffmpeg.exe and ffprobe.exe to src-tauri/resources/ffmpeg/ (dev) or bundled resources/ffmpeg, or set POD240_FFMPEG. See resources/ffmpeg/README.txt.`
+        `Frame from video: ${reason} Full installs bundle FFmpeg under resources/ffmpeg; if missing, add ffmpeg and ffprobe there (dev: src-tauri/resources/ffmpeg/) or set POD240_FFMPEG. See resources/ffmpeg/README.txt.`
       );
       slider.disabled = true;
       useBtn.disabled = true;
