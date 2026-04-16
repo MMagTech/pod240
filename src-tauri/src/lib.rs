@@ -1,4 +1,5 @@
 mod discord_webhook;
+mod updates;
 mod audio_probe;
 mod embedded_artwork;
 mod ffmpeg_frame;
@@ -1401,6 +1402,7 @@ pub fn run() {
             set_tmdb_api_key,
             set_discord_notifications,
             discord_send_test,
+            updates::check_for_updates_manual,
             analyze_inputs,
             probe_source_audio,
             probe_sidecar_subtitle,

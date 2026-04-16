@@ -3,6 +3,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { openExternalUrl } from "./open-external";
 
 const HOST_ID = "app-menu-modal-host";
 
@@ -407,6 +408,7 @@ export function showHelpDialog(): void {
       <div class="app-help-body">
         <p class="meta-tiny app-help-intro">
           For folder layout and getting the most from TMDB, see <strong>Menu → Tips</strong>.
+          <strong>Menu → Check for Updates</strong> compares this app to the latest release on GitHub (only when you choose it).
         </p>
         <ol>
           <li>
@@ -529,6 +531,79 @@ export function showAboutDialog(): void {
     });
 }
 
+type UpdateComparison = "up_to_date" | "update_available" | "newer_than_published";
+
+async function showCheckForUpdatesDialog(appendLog: (s: string) => void): Promise<void> {
+  appendLog("Checking GitHub for the latest release…");
+  let r: {
+    current_version: string;
+    latest_version: string;
+    release_page_url: string;
+    comparison: UpdateComparison;
+  };
+  try {
+    r = await invoke<typeof r>("check_for_updates_manual");
+  } catch (e) {
+    appendLog(`Update check failed: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
+
+  if (r.comparison === "update_available") {
+    appendLog(`Update available: v${r.latest_version} (you have v${r.current_version}).`);
+  } else if (r.comparison === "up_to_date") {
+    appendLog(`Up to date (v${r.current_version}).`);
+  } else {
+    appendLog(`Your version v${r.current_version} is ahead of the latest GitHub release v${r.latest_version}.`);
+  }
+
+  const host = getHost();
+  if (!host) return;
+
+  let body = "";
+  if (r.comparison === "update_available") {
+    body = `<p>A newer release is available: <strong>v${escapeHtml(r.latest_version)}</strong> (you have <strong>v${escapeHtml(r.current_version)}</strong>).</p>`;
+  } else if (r.comparison === "up_to_date") {
+    body = `<p>You are up to date. Latest release: <strong>v${escapeHtml(r.latest_version)}</strong>.</p>`;
+  } else {
+    body = `<p>Your build (<strong>v${escapeHtml(r.current_version)}</strong>) is newer than the latest published release (<strong>v${escapeHtml(r.latest_version)}</strong>).</p>`;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "meta-overlay";
+  const openBtn =
+    r.release_page_url.trim().length > 0
+      ? `<button type="button" class="secondary" id="check-updates-open">Open Release Page</button>`
+      : "";
+  overlay.innerHTML = `
+    <div class="meta-panel app-menu-dialog" role="dialog" aria-modal="true" aria-labelledby="check-updates-title">
+      <h2 id="check-updates-title">Check for Updates</h2>
+      ${body}
+      <p class="meta-tiny">This contacts GitHub only when you choose this command; nothing checks in the background.</p>
+      <div class="meta-actions">
+        ${openBtn}
+        <button type="button" id="check-updates-close">Close</button>
+      </div>
+    </div>`;
+
+  const unmount = mountOverlay(overlay);
+  overlay.querySelector("#check-updates-close")!.addEventListener("click", unmount);
+  const ob = overlay.querySelector("#check-updates-open");
+  if (ob && r.release_page_url) {
+    const url = r.release_page_url;
+    ob.addEventListener("click", () => {
+      void openExternalUrl(url);
+    });
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function wireInAppMenu(appendLog: (s: string) => void): void {
   const wrap = document.getElementById("app-menu-wrap");
   const trigger = document.getElementById("btn-app-menu");
@@ -572,6 +647,9 @@ function wireInAppMenu(appendLog: (s: string) => void): void {
   bind("menu-item-tag-ref", () => showTagReferenceDialog());
   bind("menu-item-tips", () => showTipsDialog());
   bind("menu-item-help", () => showHelpDialog());
+  bind("menu-item-check-updates", () => {
+    void showCheckForUpdatesDialog(appendLog);
+  });
   bind("menu-item-about", () => showAboutDialog());
 }
 
