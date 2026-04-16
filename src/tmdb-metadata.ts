@@ -14,6 +14,8 @@ export interface TmdbFilledMetadata {
   genres?: string;
   posterPath?: string | null;
   episodeTitle?: string;
+  /** Episode first-air date (YYYY-MM-DD) from TMDB `air_date` when kind === "tv" */
+  episodeAirDate?: string;
   /** TMDB id for episode API when kind === "tv" */
   seriesId?: number;
   movieId?: number;
@@ -119,23 +121,76 @@ async function fetchTvDetails(
   };
 }
 
-async function fetchTvEpisodeTitle(
+function normalizeTmdbAirDate(d: string | null | undefined): string | undefined {
+  if (!d || typeof d !== "string") return undefined;
+  const m = d.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : undefined;
+}
+
+async function fetchTvEpisodeDetails(
   apiKey: string,
   tvId: number,
   season: number,
   episode: number
-): Promise<string | undefined> {
+): Promise<{ title?: string; airDate?: string; overview?: string }> {
   const u = new URL(
     `${TMDB_API}/tv/${tvId}/season/${season}/episode/${episode}`
   );
   u.searchParams.set("api_key", apiKey);
 
   const r = await fetch(u.toString());
-  if (!r.ok) return undefined;
+  if (!r.ok) return {};
 
-  const j = (await r.json()) as { name?: string };
-  const n = j.name?.trim();
-  return n || undefined;
+  const j = (await r.json()) as {
+    name?: string;
+    air_date?: string | null;
+    overview?: string | null;
+  };
+  const title = j.name?.trim() || undefined;
+  const airDate = normalizeTmdbAirDate(j.air_date ?? undefined);
+  const overview = j.overview?.trim() || undefined;
+  return { title, airDate, overview };
+}
+
+/**
+ * One request: all episodes in a season with title + air_date (for batch tagging).
+ */
+export async function fetchTmdbSeasonEpisodeMap(
+  apiKey: string,
+  tvId: number,
+  seasonNumber: number
+): Promise<
+  Map<number, { title: string; airDate?: string; overview?: string }>
+> {
+  const u = new URL(`${TMDB_API}/tv/${tvId}/season/${seasonNumber}`);
+  u.searchParams.set("api_key", apiKey);
+  const r = await fetch(u.toString());
+  if (!r.ok) return new Map();
+
+  const j = (await r.json()) as {
+    episodes?: {
+      episode_number?: number;
+      name?: string;
+      air_date?: string | null;
+      overview?: string | null;
+    }[];
+  };
+  const map = new Map<
+    number,
+    { title: string; airDate?: string; overview?: string }
+  >();
+  for (const ep of j.episodes ?? []) {
+    const num = ep.episode_number;
+    if (typeof num !== "number" || num < 1) continue;
+    const title = ep.name?.trim() ?? "";
+    const overview = ep.overview?.trim() || undefined;
+    map.set(num, {
+      title,
+      airDate: normalizeTmdbAirDate(ep.air_date ?? undefined),
+      overview,
+    });
+  }
+  return map;
 }
 
 export async function fetchTmdbDetailsById(
@@ -155,9 +210,13 @@ export async function enrichWithTvEpisodeTitle(
 ): Promise<TmdbFilledMetadata> {
   if (base.kind !== "tv" || base.seriesId == null) return base;
   if (season < 0 || episode < 1) return base;
-  const ep = await fetchTvEpisodeTitle(apiKey, base.seriesId, season, episode);
-  if (!ep) return base;
-  return { ...base, episodeTitle: ep };
+  const d = await fetchTvEpisodeDetails(apiKey, base.seriesId, season, episode);
+  const next: TmdbFilledMetadata = { ...base };
+  if (d.title) next.episodeTitle = d.title;
+  if (d.airDate) next.episodeAirDate = d.airDate;
+  /** Full description (ldes): episode overview only, not series overview. */
+  next.overview = d.overview;
+  return next;
 }
 
 /**
@@ -193,13 +252,15 @@ export async function fetchTmdbMetadataFromImdbId(
     tvSeason >= 0 &&
     tvEpisode >= 1
   ) {
-    const epTitle = await fetchTvEpisodeTitle(
+    const d = await fetchTvEpisodeDetails(
       apiKey,
       base.seriesId,
       tvSeason,
       tvEpisode
     );
-    if (epTitle) base.episodeTitle = epTitle;
+    if (d.title) base.episodeTitle = d.title;
+    if (d.airDate) base.episodeAirDate = d.airDate;
+    base.overview = d.overview;
   }
 
   return base;

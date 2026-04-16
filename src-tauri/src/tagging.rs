@@ -111,7 +111,8 @@ pub struct CommonItunesTags {
     pub long_description: Option<String>,
     #[serde(default)]
     pub genre: Option<String>,
-    /// Release year or date string; 4-digit years map to `--year` when not skipped.
+    /// Release year or date: `YYYY` or `YYYY-MM-DD` (TMDB air dates). Passed to AtomicParsley `--year`
+    /// as a 4-digit year or `YYYY-MM-DDT00:00:00Z` so iTunes / iPod show the full release date.
     #[serde(default)]
     pub release_date: Option<String>,
     /// Sort title (`sonm`) via `--sortOrder name`.
@@ -424,17 +425,43 @@ pub fn artwork_base64_from_tags(tags: &EmbeddableTags) -> Option<&String> {
     }
 }
 
+/// iPod-style episode sort id for `tven` / `--TVEpisode` (e.g. S01E01; minimum two digits per part).
+pub(crate) fn tv_episode_sort_id(season: u32, episode: u32) -> String {
+    format!("S{season:02}E{episode:02}")
+}
+
+/// AtomicParsley `--year` accepts a 4-digit year **or** a UTC instant (Release Date / ©day). See wez README:
+/// `--year (num|UTC)`.
+fn ap_year_arg_from_release_date(trimmed: &str) -> Option<String> {
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.len() == 4 {
+        let y = trimmed.parse::<u32>().ok()?;
+        return ((1800..=2200).contains(&y)).then(|| trimmed.to_string());
+    }
+    if trimmed.len() == 10
+        && trimmed.as_bytes().get(4) == Some(&b'-')
+        && trimmed.as_bytes().get(7) == Some(&b'-')
+    {
+        let y = trimmed[0..4].parse::<u32>().ok()?;
+        let m = trimmed[5..7].parse::<u32>().ok()?;
+        let d = trimmed[8..10].parse::<u32>().ok()?;
+        if !(1800..=2200).contains(&y) || !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+            return None;
+        }
+        return Some(format!("{trimmed}T00:00:00Z"));
+    }
+    None
+}
+
 /// Optional atoms: desc, ldes, genre, year from `release_date`, sort title, hd, rating, encoder, copyright.
 fn append_common_itunes_tags(cmd: &mut Command, c: &CommonItunesTags, skip_release_date_year: bool) {
     if !skip_release_date_year {
         if let Some(ref s) = c.release_date {
             let t = s.trim();
-            if t.len() == 4 {
-                if let Ok(y) = t.parse::<u32>() {
-                    if (1800..=2200).contains(&y) {
-                        cmd.arg("--year").arg(format!("{y}"));
-                    }
-                }
+            if let Some(arg) = ap_year_arg_from_release_date(t) {
+                cmd.arg("--year").arg(arg);
             }
         }
     }
@@ -493,6 +520,7 @@ pub fn run_atomicparsley(
 ) -> Result<(), String> {
     let scratch = atomicparsley_scratch_path();
     let mut cmd = Command::new(exe);
+    crate::hidden_command::hide_console(&mut cmd);
     cmd.arg(video);
 
     match tags {
@@ -530,11 +558,13 @@ pub fn run_atomicparsley(
             cmd.arg("--TVEpisodeNum").arg(format!("{episode}"));
             let ep_title = episode_title.clone().unwrap_or_else(|| format!("Episode {episode}"));
             cmd.arg("--title").arg(&ep_title);
-            if let Some(ref s) = episode_id {
-                if !s.is_empty() {
-                    cmd.arg("--TVEpisode").arg(s);
-                }
-            }
+            let tven = episode_id
+                .as_ref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| tv_episode_sort_id(*season, *episode));
+            cmd.arg("--TVEpisode").arg(&tven);
             if let Some(ref s) = tv_network {
                 if !s.is_empty() {
                     cmd.arg("--TVNetwork").arg(s);
@@ -639,6 +669,34 @@ mod tests {
                 ..
             } if title == "Test"
         ));
+    }
+
+    #[test]
+    fn tv_episode_sort_id_padding() {
+        assert_eq!(tv_episode_sort_id(0, 1), "S00E01");
+        assert_eq!(tv_episode_sort_id(1, 1), "S01E01");
+        assert_eq!(tv_episode_sort_id(1, 99), "S01E99");
+        assert_eq!(tv_episode_sort_id(1, 100), "S01E100");
+        assert_eq!(tv_episode_sort_id(10, 5), "S10E05");
+    }
+
+    #[test]
+    fn ap_year_arg_four_digit_year() {
+        assert_eq!(
+            super::ap_year_arg_from_release_date("1996"),
+            Some("1996".to_string())
+        );
+        assert_eq!(super::ap_year_arg_from_release_date("1799"), None);
+    }
+
+    #[test]
+    fn ap_year_arg_iso_date_utc() {
+        assert_eq!(
+            super::ap_year_arg_from_release_date("1996-09-16"),
+            Some("1996-09-16T00:00:00Z".to_string())
+        );
+        assert_eq!(super::ap_year_arg_from_release_date("1996-9-16"), None);
+        assert_eq!(super::ap_year_arg_from_release_date("1996-09-32"), None);
     }
 
     #[test]

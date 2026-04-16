@@ -54,10 +54,16 @@
             hidden
           >
             <button type="button" role="menuitem" class="app-menu-item" id="menu-item-tmdb">
-              Add TMDB API Key
+              TMDB API
+            </button>
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-discord-notifications">
+              Notification
             </button>
             <button type="button" role="menuitem" class="app-menu-item" id="menu-item-tag-ref">
               Tag Reference
+            </button>
+            <button type="button" role="menuitem" class="app-menu-item" id="menu-item-tips">
+              Tips
             </button>
             <button type="button" role="menuitem" class="app-menu-item" id="menu-item-help">
               Help
@@ -68,6 +74,25 @@
           </div>
         </div>
       </header>
+
+      <div
+        id="queue-total-progress-wrap"
+        class="queue-total-progress"
+        hidden
+        aria-live="polite"
+      >
+        <div class="queue-total-progress-row">
+          <span class="queue-total-progress-caption">Overall progress</span>
+          <span id="queue-total-progress-label" class="queue-total-progress-text"></span>
+        </div>
+        <progress
+          id="queue-total-progress-bar"
+          class="queue-total-progress-bar"
+          max="100"
+          value="0"
+          aria-label="Overall queue progress"
+        ></progress>
+      </div>
 
       <section class="dropzone" id="dropzone" tabindex="0">
         <p>Drop Video Files or Folders Here</p>

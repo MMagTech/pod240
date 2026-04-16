@@ -84,7 +84,9 @@ pub fn ffmpeg_probe_duration(app: AppHandle, source_path: String) -> Result<f64,
         return Err("File not found.".into());
     }
     let ffprobe = find_ffprobe(&app)?;
-    let out = Command::new(&ffprobe)
+    let mut cmd = Command::new(&ffprobe);
+    crate::hidden_command::hide_console(&mut cmd);
+    let out = cmd
         .arg("-v")
         .arg("error")
         .arg("-show_entries")
@@ -121,7 +123,9 @@ pub fn ffmpeg_extract_frame_base64(
     };
     let ffmpeg = find_ffmpeg(&app)?;
     // Simple scale (avoids filter-comma escaping differences across platforms).
-    let out = Command::new(&ffmpeg)
+    let mut cmd = Command::new(&ffmpeg);
+    crate::hidden_command::hide_console(&mut cmd);
+    let out = cmd
         .arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")

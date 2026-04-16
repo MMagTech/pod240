@@ -10,7 +10,7 @@ Get the latest **Windows** or **macOS** build from the project’s **Releases** 
 
 ## First launch (unsigned builds)
 
-Release installers are **not** code-signed. **Windows** may show **SmartScreen**; choose “More info” / “Run anyway” if you trust the download. **macOS** may block the app until you **right‑click → Open** the first time, or allow it under **System Settings → Privacy & Security**. This is typical for unsigned open-source builds.
+Release installers are **not** Developer ID–signed or **notarized**. **Windows** may show **SmartScreen**; choose “More info” / “Run anyway” if you trust the download. **macOS** may show **Gatekeeper** warnings (sometimes phrased like the app “can’t be opened” or is “damaged”) until you **right‑click → Open** the first time, or allow the app under **System Settings → Privacy & Security**. This is typical for hobby open-source builds distributed outside the Mac App Store.
 
 ## What you get in the box
 
@@ -36,7 +36,13 @@ Converted files are **`.mp4`** in **240p** (per the Olsro preset). The app picks
 
 ## Settings
 
-Preferences (such as default output folder and optional TMDB API key) are stored in **`pod240-settings.json`** next to the application executable—handy for a **portable** install with no Windows Registry dependency.
+Preferences are stored in **`pod240-settings.json`** next to the application executable—handy for a **portable** install with no Windows Registry dependency. They include:
+
+- **Default output folder** (optional).
+- **TMDB API key** (optional; movie/TV artwork and metadata in the metadata flow).
+- **Discord notifications** (optional): an incoming **Discord webhook** URL plus toggles for **queue finished** and **encode failed**—configure under **Menu → Notification**.
+
+No Discord account data is stored beyond the webhook URL and those toggles; messages are sent only when you enable them and the corresponding event occurs.
 
 ## Credits and licenses
 

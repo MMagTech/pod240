@@ -92,7 +92,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-width: 40rem;
+  max-width: 48rem;
   width: 100%;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 1.25rem;
@@ -185,6 +185,84 @@ body {
   margin-bottom: 1rem;
 }
 
+.queue-total-progress {
+  width: 100%;
+  flex-shrink: 0;
+  margin-bottom: 1rem;
+}
+
+.queue-total-progress[hidden] {
+  display: none !important;
+}
+
+.queue-total-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.queue-total-progress-caption {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.queue-total-progress-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  font-size: var(--font-ui-sm);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.queue-total-progress-count {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--muted) 38%, var(--text) 62%);
+}
+
+.queue-total-progress-sep {
+  padding: 0 0.1em;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--muted) 72%, var(--text) 28%);
+  opacity: 0.85;
+}
+
+.queue-total-progress-pct {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 22%, var(--text) 78%);
+}
+
+.queue-total-progress-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border: none;
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+.queue-total-progress-bar::-webkit-progress-bar {
+  background: color-mix(in srgb, var(--muted) 22%, transparent);
+  border-radius: 4px;
+}
+
+.queue-total-progress-bar::-webkit-progress-value {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-hover) 92%, #fff 8%), var(--accent));
+  border-radius: 4px;
+}
+
+.queue-total-progress-bar::-moz-progress-bar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-hover) 92%, #fff 8%), var(--accent));
+  border-radius: 4px;
+}
+
 .app-header-main {
   flex: 1;
   min-width: min(100%, 12rem);
@@ -266,6 +344,111 @@ button.app-menu-trigger {
 .app-menu-tmdb-docs {
   margin: 0.35rem 0 0.75rem;
   line-height: 1.4;
+}
+
+.app-tmdb-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.app-tmdb-key-row .app-tmdb-key-input {
+  flex: 1;
+  min-width: 10rem;
+  font-family: ui-monospace, "Segoe UI Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: var(--font-ui);
+}
+
+/* WebView2 / Edge: hide built-in password “reveal” (eye) inside the field */
+.app-tmdb-key-input[type="password"]::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.app-tmdb-key-input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.app-tmdb-key-input[type="password"]::-webkit-credentials-auto-fill-button,
+.app-tmdb-key-input[type="password"]::-webkit-strong-password-auto-fill-button {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+  width: 0;
+  max-height: 0;
+  margin: 0;
+}
+
+button.app-tmdb-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.app-menu-apprise-docs {
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.app-apprise-dialog {
+  width: min(100%, 480px);
+}
+
+.app-apprise-fieldset {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+  background: color-mix(in srgb, var(--bg) 40%, var(--surface));
+}
+
+.app-apprise-fieldset legend {
+  padding: 0 0.25rem;
+}
+
+.app-apprise-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.app-apprise-check:first-of-type {
+  margin-top: 0.15rem;
+}
+
+.app-apprise-check input {
+  margin: 0.2rem 0 0;
+  flex-shrink: 0;
+}
+
+.app-apprise-actions {
+  margin-top: 0.25rem;
+  padding-top: 0;
+}
+
+.app-apprise-test-row .app-apprise-test-status {
+  margin-left: auto;
+  max-width: min(100%, 16rem);
+  font-size: var(--font-ui-sm);
+  font-weight: 550;
+  text-align: right;
+  line-height: 1.35;
+  align-self: center;
+}
+
+.app-apprise-test-status.is-success {
+  color: var(--ok);
+}
+
+.app-apprise-test-status.is-failure {
+  color: var(--danger);
+  white-space: normal;
 }
 
 .app-menu-tag-ref-dialog {
@@ -518,6 +701,52 @@ button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
   margin-bottom: 0;
 }
 
+.app-help-intro {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.app-help-body ol > li > .app-help-nested {
+  margin: 0.45rem 0 0;
+  padding-left: 1.15rem;
+  list-style: disc;
+}
+
+.app-help-body ol > li > .app-help-nested > li {
+  margin-bottom: 0.45rem;
+}
+
+.app-help-body ol > li > .app-help-nested > li:last-child {
+  margin-bottom: 0;
+}
+
+.app-tips-body {
+  max-height: min(60vh, 24rem);
+}
+
+.app-tips-lead {
+  margin-top: 0;
+  margin-bottom: 0.85rem;
+}
+
+.app-tips-list {
+  margin: 0 0 0.85rem;
+  padding-left: 1.2rem;
+  list-style: disc;
+}
+
+.app-tips-list li {
+  margin-bottom: 0.6rem;
+}
+
+.app-tips-list li:last-child {
+  margin-bottom: 0;
+}
+
+.app-tips-foot {
+  margin-bottom: 0;
+}
+
 .meta-overlay {
   position: fixed;
   inset: 0;
@@ -582,7 +811,7 @@ button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
 }
 
 .meta-panel {
-  width: min(100%, 480px);
+  width: min(100%, 520px);
   margin-top: 0.5rem;
   margin-bottom: 2rem;
   padding: 1.35rem 1.4rem;
@@ -598,7 +827,7 @@ button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
 }
 
 .meta-tv-batch-panel {
-  width: min(100%, 560px);
+  width: min(100%, 1000px);
   padding: 1.5rem 1.35rem;
 }
 
@@ -651,7 +880,7 @@ button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
 }
 
 .audio-pick-panel {
-  width: min(100%, 520px);
+  width: min(100%, 600px);
   max-width: 100%;
   overflow-x: hidden;
   box-sizing: border-box;
@@ -759,6 +988,11 @@ button.secondary.meta-tmdb-fetch-btn:active:not(:disabled) {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
+}
+
+/* Single-file metadata: TV vs music-video–only optional rows grouped; hidden when category does not apply. */
+.meta-optional-kind-block:not([hidden]) {
+  margin-top: 0.35rem;
 }
 
 .meta-fieldset {
@@ -1046,15 +1280,251 @@ details[open] > .meta-optional-tags-summary::before {
 
 .meta-batch-table {
   width: 100%;
-  border-collapse: collapse;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.78rem;
 }
 
 .meta-batch-table th,
 .meta-batch-table td {
-  padding: 0.35rem 0.4rem;
+  padding: 0.35rem 0.45rem;
   text-align: left;
   border-bottom: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  vertical-align: middle;
+}
+
+.meta-batch-table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.meta-batch-table td.meta-batch-sub {
+  vertical-align: top;
+}
+
+/* TV batch: File | Ep | Title | Ep ID | Release | Subs */
+#tv-batch-table th:nth-child(1),
+#tv-batch-table td:nth-child(1) {
+  width: 24%;
+}
+
+#tv-batch-table th:nth-child(2),
+#tv-batch-table td:nth-child(2) {
+  width: 4.25rem;
+}
+
+#tv-batch-table th:nth-child(3),
+#tv-batch-table td:nth-child(3) {
+  min-width: 0;
+  width: auto;
+}
+
+#tv-batch-table th:nth-child(4),
+#tv-batch-table td:nth-child(4) {
+  width: 5.75rem;
+  min-width: 5.25rem;
+  max-width: 6.5rem;
+}
+
+#tv-batch-table th:nth-child(5),
+#tv-batch-table td:nth-child(5) {
+  width: 7.25rem;
+  min-width: 6.75rem;
+  max-width: 8rem;
+}
+
+#tv-batch-table th:nth-child(6),
+#tv-batch-table td:nth-child(6) {
+  width: 6.75rem;
+  min-width: 6.75rem;
+  max-width: 7.25rem;
+}
+
+/* Orphan batch: File | S | Ep | Title | Ep ID | Release | Subs */
+#tv-orph-table th:nth-child(1),
+#tv-orph-table td:nth-child(1) {
+  width: 20%;
+}
+
+#tv-orph-table th:nth-child(2),
+#tv-orph-table td:nth-child(2),
+#tv-orph-table th:nth-child(3),
+#tv-orph-table td:nth-child(3) {
+  width: 3.35rem;
+  min-width: 3.25rem;
+  max-width: 3.5rem;
+}
+
+#tv-orph-table th:nth-child(4),
+#tv-orph-table td:nth-child(4) {
+  min-width: 0;
+  width: auto;
+}
+
+#tv-orph-table th:nth-child(5),
+#tv-orph-table td:nth-child(5) {
+  width: 5.5rem;
+  min-width: 5rem;
+  max-width: 6.25rem;
+}
+
+#tv-orph-table th:nth-child(6),
+#tv-orph-table td:nth-child(6) {
+  width: 7rem;
+  min-width: 6.5rem;
+  max-width: 8rem;
+}
+
+#tv-orph-table th:nth-child(7),
+#tv-orph-table td:nth-child(7) {
+  width: 6.75rem;
+  min-width: 6.75rem;
+  max-width: 7.25rem;
+}
+
+/* Narrow columns: nowrap + horizontal padding only (typography matches .meta-batch-table thead th). */
+.meta-batch-th-narrow {
+  white-space: nowrap;
+  padding-left: 0.35rem;
+  padding-right: 0.55rem;
+}
+
+#tv-batch-table th:nth-child(3),
+#tv-orph-table th:nth-child(4) {
+  padding-left: 0.55rem;
+}
+
+.meta-batch-epid-input {
+  font-size: var(--font-ui-sm);
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.meta-batch-date-input {
+  font-size: var(--font-ui-sm);
+}
+
+.meta-batch-file-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-batch-table th:first-child,
+.meta-batch-table td.meta-batch-file-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--bg) 50%, var(--surface));
+  /* Border only: box-shadow bleeds onto the next column and obscures inputs */
+  border-right: 1px solid color-mix(in srgb, var(--muted) 42%, transparent);
+  box-shadow: none;
+}
+
+.meta-batch-table thead th:first-child {
+  z-index: 2;
+}
+
+.meta-batch-table tr.meta-parse-warn td.meta-batch-file-cell {
+  background: color-mix(in srgb, #fab005 15%, color-mix(in srgb, var(--bg) 50%, var(--surface)));
+}
+
+.meta-batch-table tbody tr:hover td:not(.meta-batch-file-cell) {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.meta-batch-table tbody tr:hover .meta-batch-file-cell {
+  background: color-mix(in srgb, var(--accent) 10%, color-mix(in srgb, var(--bg) 50%, var(--surface)));
+}
+
+.meta-batch-table tbody tr.meta-parse-warn:hover .meta-batch-file-cell {
+  background: color-mix(in srgb, var(--accent) 10%, color-mix(in srgb, #fab005 18%, color-mix(in srgb, var(--bg) 50%, var(--surface))));
+}
+
+.meta-batch-table tbody tr.tv-batch-row-selectable {
+  cursor: pointer;
+}
+
+.meta-batch-table tbody tr.tv-batch-row-selected td {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.meta-batch-table tbody tr.tv-batch-row-selected .meta-batch-file-cell {
+  background: color-mix(in srgb, var(--accent) 22%, color-mix(in srgb, var(--bg) 50%, var(--surface)));
+}
+
+.meta-batch-table tbody tr.meta-parse-warn.tv-batch-row-selected .meta-batch-file-cell {
+  background: color-mix(
+    in srgb,
+    var(--accent) 20%,
+    color-mix(in srgb, #fab005 15%, color-mix(in srgb, var(--bg) 50%, var(--surface)))
+  );
+}
+
+.meta-label-block {
+  display: block;
+}
+
+.tv-batch-ep-desc-panel {
+  margin: 1.1rem 0 0;
+  padding: 1rem 0 1.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 22%, transparent);
+}
+
+.tv-batch-ep-desc-panel .meta-label-block {
+  margin: 0.35rem 0 0;
+}
+
+.tv-batch-ep-desc-hint {
+  margin: 0 0 0.85rem;
+  line-height: 1.45;
+}
+
+.tv-batch-ep-desc-context {
+  display: block;
+  margin: 0.35rem 0 0.55rem;
+  color: var(--muted);
+}
+
+textarea.meta-input.tv-batch-ep-desc-textarea {
+  display: block;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 7.5rem;
+  margin-top: 0.15rem;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* Match episode/season number fields to title row height so inputs line up */
+.meta-batch-table .meta-input.mini {
+  min-height: var(--control-height);
+  padding: 0.28rem 0.4rem;
+}
+
+/* Title column: stay inside cell so it does not draw under following columns */
+#tv-batch-table td:nth-child(3) .meta-input,
+#tv-orph-table td:nth-child(4) .meta-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#tv-batch-table td:nth-child(4) .meta-input,
+#tv-batch-table td:nth-child(5) .meta-input,
+#tv-orph-table td:nth-child(5) .meta-input,
+#tv-orph-table td:nth-child(6) .meta-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .meta-parse-warn {
@@ -1815,16 +2285,41 @@ body.queue-reordering {
   max-width: 11rem;
 }
 
+.meta-batch-sub-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* Batch table: cell is ~7rem — cap subs block so it cannot spill into Title */
+.meta-batch-table .meta-batch-sub {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.meta-batch-table .meta-batch-sub .tv-batch-sub-pick,
+.meta-batch-table .meta-batch-sub .tv-orph-sub-pick {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .meta-batch-sub .meta-batch-sub-check {
   display: inline-flex;
-  margin-right: 0.25rem;
+  flex-shrink: 0;
+  margin-right: 0;
   vertical-align: middle;
 }
 
 .meta-batch-sub .tv-batch-sub-pick,
 .meta-batch-sub .tv-orph-sub-pick {
   display: inline-block;
-  margin-top: 0.25rem;
+  flex-shrink: 0;
+  margin-top: 0;
   min-height: 1.65rem;
   padding: 0.1rem 0.45rem;
   font-size: 0.72rem;
@@ -1833,7 +2328,7 @@ body.queue-reordering {
 .meta-batch-sub .tv-batch-sub-cap,
 .meta-batch-sub .tv-orph-sub-cap {
   display: block;
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
   word-break: break-word;
 }
 
@@ -1905,7 +2400,7 @@ body.queue-reordering {
   border: 1px solid color-mix(in srgb, var(--danger) 55%, #2a0a0a);
 }
 
-/* Queue-only: Remove — red pill, white text */
+/* Queue-only: per-row Clear — neutral secondary pill (status chips stay colored; avoids clashing with Failed red) */
 .queue-list .queue-item-aside button.remove-btn {
   min-height: unset;
   padding: 0.2rem 0.6rem;
@@ -1913,36 +2408,41 @@ body.queue-reordering {
   font-weight: 500;
   line-height: 1.25;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--danger) 55%, #3a1010);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--danger) 92%, #fff 8%),
-    color-mix(in srgb, #c53030 88%, #2a0a0a 12%)
-  );
-  box-shadow: var(--btn-shadow-primary);
-  color: #fff;
-  text-shadow: 0 1px 1px color-mix(in srgb, #000 30%, transparent);
+  border: 1px solid var(--btn-secondary-border);
+  background: var(--btn-secondary-face);
+  box-shadow: var(--btn-secondary-shadow);
+  color: var(--text);
+  text-shadow: none;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .queue-list .queue-item-aside button.remove-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
-  border-color: color-mix(in srgb, var(--danger) 65%, #2a0a0a);
+  filter: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-elevated) 100%, #fff 12%),
+    color-mix(in srgb, var(--surface-elevated) 72%, #07080a 28%)
+  );
+  border-color: color-mix(in srgb, var(--muted) 52%, transparent);
+  box-shadow:
+    var(--btn-shadow-lift),
+    0 2px 5px color-mix(in srgb, #000 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
 }
 
 .queue-list .queue-item-aside button.remove-btn:focus-visible {
   outline: none;
   box-shadow:
-    var(--btn-shadow-primary),
-    0 0 0 2px color-mix(in srgb, #fff 40%, transparent);
+    var(--btn-secondary-shadow),
+    0 0 0 3px color-mix(in srgb, var(--muted) 26%, transparent);
 }
 
 .queue-list .queue-item-aside button.remove-btn:active:not(:disabled) {
-  filter: brightness(0.94);
+  filter: brightness(0.97);
   box-shadow:
-    0 1px 1px color-mix(in srgb, #000 38%, transparent),
-    inset 0 1px 3px color-mix(in srgb, #000 28%, transparent);
+    0 1px 1px color-mix(in srgb, #000 28%, transparent),
+    inset 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 }
 
 .log-details {
@@ -1965,7 +2465,8 @@ header,
 .log-details pre {
   margin: 0.5rem 0 0;
   padding: 0.75rem;
-  max-height: 120px;
+  /* Room for several log lines when expanded; matches tall default window */
+  max-height: min(200px, 28vh);
   overflow: auto;
   background: var(--surface-elevated);
   border: 1px solid var(--border);

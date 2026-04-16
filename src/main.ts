@@ -42,6 +42,9 @@ const logPre = document.getElementById("log")!;
 const logDetails = document.getElementById("log-details") as HTMLDetailsElement;
 const hbWarning = document.getElementById("hb-warning")!;
 const apWarning = document.getElementById("ap-warning")!;
+const queueTotalProgressWrap = document.getElementById("queue-total-progress-wrap") as HTMLDivElement;
+const queueTotalProgressBar = document.getElementById("queue-total-progress-bar") as HTMLProgressElement;
+const queueTotalProgressLabel = document.getElementById("queue-total-progress-label") as HTMLSpanElement;
 
 let jobs: Job[] = [];
 
@@ -158,6 +161,38 @@ function arrayMoveJobOrder(a: Job[], from: number, to: number): Job[] {
   return next;
 }
 
+/** Equal weight per job: terminal states = 1, encoding = progress/100, pending = 0. */
+function computeOverallQueueProgress(
+  queue: Job[]
+): { pct: number; terminal: number; total: number } | null {
+  const n = queue.length;
+  if (n === 0) return null;
+  let sum = 0;
+  let terminal = 0;
+  for (const j of queue) {
+    if (j.status === "done" || j.status === "failed" || j.status === "cancelled") {
+      sum += 1;
+      terminal += 1;
+    } else if (j.status === "encoding") {
+      sum += (j.progress ?? 0) / 100;
+    }
+  }
+  return { pct: (sum / n) * 100, terminal, total: n };
+}
+
+function updateQueueTotalProgress(queue: Job[]) {
+  const r = computeOverallQueueProgress(queue);
+  if (!r) {
+    queueTotalProgressWrap.hidden = true;
+    return;
+  }
+  queueTotalProgressWrap.hidden = false;
+  const rounded = Math.min(100, Math.round(r.pct * 10) / 10);
+  queueTotalProgressBar.value = rounded;
+  queueTotalProgressBar.setAttribute("aria-valuenow", String(Math.round(r.pct)));
+  queueTotalProgressLabel.innerHTML = `<span class="queue-total-progress-count">${r.terminal}/${r.total}</span><span class="queue-total-progress-sep" aria-hidden="true"> · </span><span class="queue-total-progress-pct">${Math.round(r.pct)}%</span>`;
+}
+
 function renderQueue() {
   queueList.innerHTML = "";
   jobs.forEach((job, index) => {
@@ -268,11 +303,20 @@ function renderQueue() {
     aside.className = "queue-item-aside";
     aside.appendChild(status);
 
-    if (job.status === "pending") {
+    if (
+      job.status === "pending" ||
+      job.status === "failed" ||
+      job.status === "done" ||
+      job.status === "cancelled"
+    ) {
       const rm = document.createElement("button");
       rm.type = "button";
       rm.className = "remove-btn secondary";
-      rm.textContent = "Remove";
+      rm.textContent = "Clear";
+      rm.title =
+        job.status === "pending"
+          ? "Clear this job from the queue"
+          : "Clear this row so you can add the file again or tidy the list";
       rm.onclick = (ev) => {
         ev.stopPropagation();
         invoke("remove_job", { jobId: job.id }).catch((e) => appendLog(String(e)));
@@ -298,13 +342,15 @@ function renderQueue() {
     queueMeta.textContent = "";
   } else {
     queueMeta.hidden = false;
-    queueMeta.textContent = `${n} ${n === 1 ? "file" : "files"} queued`;
+    queueMeta.textContent = `${n} ${n === 1 ? "File" : "Files"} Queued`;
   }
 
   const encoding = jobs.find((j) => j.status === "encoding");
   btnCancel.disabled = !encoding;
   // Clear everything except the job currently encoding (pending / done / failed / cancelled are all removable).
   btnClearQueue.disabled = !jobs.some((j) => j.status !== "encoding");
+
+  updateQueueTotalProgress(jobs);
 }
 
 async function refreshQueue() {
@@ -319,7 +365,7 @@ async function refreshQueue() {
 async function enqueuePathsWithMetadata(paths: string[]) {
   if (paths.length === 0) return;
   try {
-    showBusy("Scanning folder for video files…");
+    showBusy("Scanning Folder for Video Files...");
     const analysis = await invoke<AnalyzeResult>("analyze_inputs", { paths });
     hideBusy();
     if (analysis.files.length === 0) {
@@ -441,7 +487,7 @@ btnOutputClear.addEventListener("click", async () => {
 btnClearQueue.addEventListener("click", () => {
   invoke<number>("clear_pending_jobs")
     .then((n) => {
-      if (n > 0) appendLog(`Removed ${n} job(s) from the queue.`);
+      if (n > 0) appendLog(`Cleared ${n} job(s) from the queue.`);
     })
     .catch((e) => appendLog(String(e)));
 });
@@ -461,7 +507,12 @@ void (async () => {
   }).catch(() => {});
 
   try {
-    const settings = await invoke<{ default_output_dir: string | null }>("get_settings");
+    const settings = await invoke<{
+      default_output_dir: string | null;
+      apprise_notify_url?: string | null;
+      apprise_notify_on_queue_done?: boolean;
+      apprise_notify_on_encode_failed?: boolean;
+    }>("get_settings");
     outputLabel.textContent =
       settings.default_output_dir ?? "Same as Source File";
   } catch {

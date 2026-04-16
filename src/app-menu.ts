@@ -1,5 +1,5 @@
 /**
- * In-app menu (styled to match UI) and dialogs (TMDB key, Tag Reference, Help, About).
+ * In-app menu (styled to match UI) and dialogs (TMDB API, Discord Notifications, Tag Reference, Tips, Help, About).
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -74,7 +74,7 @@ function getHost(): HTMLElement | null {
   return document.getElementById(HOST_ID);
 }
 
-/** Menu dialogs (TMDB, Tag Reference, Help, About): close only via the dialog’s Close button, not backdrop or Escape. */
+/** Menu dialogs (TMDB API, Discord Notifications, Tag Reference, Tips, Help, About): close only via the dialog’s Close button, not backdrop or Escape. */
 function mountOverlay(overlay: HTMLElement): () => void {
   const host = getHost();
   if (!host) return () => {};
@@ -97,14 +97,28 @@ export function showTmdbKeyDialog(appendLog: (s: string) => void): void {
 
   overlay.innerHTML = `
     <div class="meta-panel app-menu-dialog" role="dialog" aria-modal="true" aria-labelledby="tmdb-dialog-title">
-      <h2 id="tmdb-dialog-title">TMDB API Key</h2>
-      <p class="meta-hint">Stored only on this PC. Used for <strong>Fetch Poster</strong> and <strong>Fetch Tags from TMDB</strong> in the metadata dialogs.</p>
+      <h2 id="tmdb-dialog-title">TMDB API</h2>
+      <p class="meta-hint">Used for <strong>Fetch Poster</strong> and <strong>Fetch Tags from TMDB</strong> in the metadata dialogs.</p>
       <p class="meta-tiny app-menu-tmdb-docs">
         <a class="app-menu-external-link" href="https://developer.themoviedb.org/docs/getting-started" target="_blank" rel="noopener noreferrer">TMDB: Getting Started</a>
         — how to register and obtain an API key.
       </p>
       <label class="app-menu-label">API Key
-        <input type="text" id="app-tmdb-input" class="meta-input" placeholder="Paste Key" autocomplete="off" spellcheck="false" />
+        <div class="app-tmdb-key-row">
+          <input
+            type="password"
+            id="app-tmdb-input"
+            class="meta-input app-tmdb-key-input"
+            placeholder="Paste Key"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+          />
+          <button type="button" class="secondary app-tmdb-toggle" id="app-tmdb-toggle" aria-pressed="false" aria-label="Show API key">
+            Show
+          </button>
+        </div>
       </label>
       <p class="meta-tiny">This product uses the TMDB API but is not endorsed by TMDB.</p>
       <div class="meta-actions">
@@ -116,6 +130,22 @@ export function showTmdbKeyDialog(appendLog: (s: string) => void): void {
 
   const close = mountOverlay(overlay);
   const input = overlay.querySelector("#app-tmdb-input") as HTMLInputElement;
+  const toggleBtn = overlay.querySelector("#app-tmdb-toggle") as HTMLButtonElement;
+
+  toggleBtn.addEventListener("click", () => {
+    const showPlain = input.type === "password";
+    if (showPlain) {
+      input.type = "text";
+      toggleBtn.textContent = "Hide";
+      toggleBtn.setAttribute("aria-pressed", "true");
+      toggleBtn.setAttribute("aria-label", "Hide API key");
+    } else {
+      input.type = "password";
+      toggleBtn.textContent = "Show";
+      toggleBtn.setAttribute("aria-pressed", "false");
+      toggleBtn.setAttribute("aria-label", "Show API key");
+    }
+  });
 
   void invoke<{ tmdb_api_key?: string | null }>("get_settings").then((s) => {
     const k = s.tmdb_api_key;
@@ -127,7 +157,7 @@ export function showTmdbKeyDialog(appendLog: (s: string) => void): void {
     try {
       await invoke("set_tmdb_api_key", { key: null });
       input.value = "";
-      appendLog("TMDB API key cleared.");
+      appendLog("TMDB API: key cleared.");
     } catch (e) {
       appendLog(String(e));
     }
@@ -137,11 +167,136 @@ export function showTmdbKeyDialog(appendLog: (s: string) => void): void {
     const key = input.value.trim();
     try {
       await invoke("set_tmdb_api_key", { key: key || null });
-      appendLog(key ? "TMDB API key saved." : "TMDB API key cleared.");
+      appendLog(key ? "TMDB API: key saved." : "TMDB API: key cleared.");
     } catch (e) {
       appendLog(String(e));
     }
     close();
+  });
+}
+
+export function showDiscordNotificationsDialog(appendLog: (s: string) => void): void {
+  const host = getHost();
+  if (!host) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "meta-overlay";
+
+  overlay.innerHTML = `
+    <div class="meta-panel app-menu-dialog app-apprise-dialog" role="dialog" aria-modal="true" aria-labelledby="discord-notify-dialog-title">
+      <h2 id="discord-notify-dialog-title">Discord Notifications</h2>
+      <p class="meta-hint">
+        Optional: Send messages to a Discord Channel using a webhook.
+      </p>
+      <p class="meta-tiny app-menu-apprise-docs">
+        <a class="app-menu-external-link" href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks" target="_blank" rel="noopener noreferrer">Discord: Intro to Webhooks</a>
+      </p>
+      <label class="app-menu-label">Webhook URL
+        <input type="url" id="app-apprise-url" class="meta-input" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false" />
+      </label>
+      <fieldset class="app-apprise-fieldset">
+        <legend class="meta-tiny">When to Notify</legend>
+        <label class="app-apprise-check">
+          <input type="checkbox" id="app-apprise-queue-done" />
+          <span>When Queue Finishes (All Encodes Done)</span>
+        </label>
+        <label class="app-apprise-check">
+          <input type="checkbox" id="app-apprise-encode-failed" />
+          <span>On Encode Failure</span>
+        </label>
+      </fieldset>
+      <div class="meta-actions app-apprise-actions app-apprise-test-row">
+        <button type="button" class="secondary" id="app-apprise-test">Send Test</button>
+        <span class="app-apprise-test-status" id="app-apprise-test-status" aria-live="polite"></span>
+      </div>
+      <div class="meta-actions">
+        <button type="button" class="secondary" id="app-apprise-cancel">Cancel</button>
+        <button type="button" class="secondary" id="app-apprise-clear">Clear</button>
+        <button type="button" id="app-apprise-save">Save</button>
+      </div>
+    </div>`;
+
+  const close = mountOverlay(overlay);
+  const urlInput = overlay.querySelector("#app-apprise-url") as HTMLInputElement;
+  const cbQueue = overlay.querySelector("#app-apprise-queue-done") as HTMLInputElement;
+  const cbFail = overlay.querySelector("#app-apprise-encode-failed") as HTMLInputElement;
+  const testStatusEl = overlay.querySelector("#app-apprise-test-status") as HTMLSpanElement;
+
+  const setTestStatus = (state: "idle" | "success" | "failure") => {
+    testStatusEl.classList.remove("is-success", "is-failure");
+    if (state === "idle") {
+      testStatusEl.textContent = "";
+      return;
+    }
+    testStatusEl.textContent =
+      state === "success" ? "Successful" : "Failed: See Log for Error";
+    testStatusEl.classList.add(state === "success" ? "is-success" : "is-failure");
+  };
+
+  void invoke<{
+    apprise_notify_url?: string | null;
+    apprise_notify_on_queue_done?: boolean;
+    apprise_notify_on_encode_failed?: boolean;
+  }>("get_settings").then((s) => {
+    urlInput.value = s.apprise_notify_url?.trim() ?? "";
+    cbQueue.checked = Boolean(s.apprise_notify_on_queue_done);
+    cbFail.checked = Boolean(s.apprise_notify_on_encode_failed);
+  });
+
+  overlay.querySelector("#app-apprise-cancel")!.addEventListener("click", close);
+
+  overlay.querySelector("#app-apprise-test")!.addEventListener("click", () => {
+    void (async () => {
+      const url = urlInput.value.trim();
+      try {
+        await invoke("discord_send_test", { url });
+        setTestStatus("success");
+        appendLog("Discord: test message sent.");
+      } catch (e) {
+        setTestStatus("failure");
+        appendLog(String(e));
+      }
+    })();
+  });
+
+  overlay.querySelector("#app-apprise-clear")!.addEventListener("click", () => {
+    void (async () => {
+      urlInput.value = "";
+      cbQueue.checked = false;
+      cbFail.checked = false;
+      setTestStatus("idle");
+      try {
+        await invoke("set_discord_notifications", {
+          payload: {
+            url: null,
+            onQueueDone: false,
+            onEncodeFailed: false,
+          },
+        });
+        appendLog("Discord notification settings cleared.");
+      } catch (e) {
+        appendLog(String(e));
+      }
+    })();
+  });
+
+  overlay.querySelector("#app-apprise-save")!.addEventListener("click", () => {
+    void (async () => {
+      const raw = urlInput.value.trim();
+      try {
+        await invoke("set_discord_notifications", {
+          payload: {
+            url: raw || null,
+            onQueueDone: cbQueue.checked,
+            onEncodeFailed: cbFail.checked,
+          },
+        });
+        appendLog("Discord notification settings saved.");
+      } catch (e) {
+        appendLog(String(e));
+      }
+      close();
+    })();
   });
 }
 
@@ -172,8 +327,8 @@ export function showTagReferenceDialog(): void {
           <dt>tvsn</dt><dd>Season Number</dd>
           <dt>tves</dt><dd>Episode Number</dd>
           <dt>tven</dt><dd>Episode ID</dd>
-          <dt>tvnn</dt><dd>TV Network</dd>
-          <dt>sosn</dt><dd>Sort Show (List Order)</dd>
+          <dt>tvnn</dt><dd>TV Network (also in Optional Tags for single TV episodes)</dd>
+          <dt>sosn</dt><dd>Sort Show — how the <strong>series</strong> sorts in lists. For TV, this is separate from <strong>Sort Title</strong> under Optional Tags (which sorts the <strong>episode title</strong>).</dd>
         </dl>
         <h3 class="app-menu-tag-ref-h3">Music Video</h3>
         <dl class="app-menu-tag-dl">
@@ -184,11 +339,13 @@ export function showTagReferenceDialog(): void {
           <dt>cpil</dt><dd>Compilation</dd>
         </dl>
         <h3 class="app-menu-tag-ref-h3">Optional Tags</h3>
+        <p class="meta-tiny">These atoms are written for <strong>Movie</strong>, <strong>TV Show</strong>, and <strong>Music Video</strong>, except where noted. <strong>Genre</strong> is set from each category’s main form (not a duplicate field here). For <strong>movies</strong>, if the main <strong>Year</strong> is set, the optional Release Date does not add a second year.</p>
         <dl class="app-menu-tag-dl">
           <dt>desc</dt><dd>Short Description</dd>
           <dt>ldes</dt><dd>Full Description</dd>
           <dt>©day</dt><dd>Release Date</dd>
-          <dt>sonm</dt><dd>Sort Title</dd>
+          <dt>sonm</dt><dd><strong>Sort Title</strong> — sort order for the primary title: <strong>movie name</strong>, <strong>TV episode title</strong>, or <strong>music video song</strong>. For TV, not the same as <strong>Sort Show</strong> (<code class="app-about-code">sosn</code>).</dd>
+          <dt>sosn</dt><dd><strong>Sort Show</strong> (TV, in Optional Tags next to TV Network) — sort order for the <strong>series name</strong>; use <strong>Sort Title</strong> above for the episode title.</dd>
           <dt>hdvd</dt><dd>HD Video Flag</dd>
           <dt>rtng</dt><dd>Content Rating</dd>
           <dt>©too</dt><dd>Encoder (Tool Name)</dd>
@@ -205,6 +362,38 @@ export function showTagReferenceDialog(): void {
   overlay.querySelector("#app-tag-ref-close")!.addEventListener("click", close);
 }
 
+export function showTipsDialog(): void {
+  const host = getHost();
+  if (!host) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "meta-overlay";
+
+  overlay.innerHTML = `
+    <div class="meta-panel app-menu-dialog app-help-dialog" role="dialog" aria-modal="true" aria-labelledby="tips-dialog-title">
+      <h2 id="tips-dialog-title">Tips</h2>
+      <div class="app-help-body app-tips-body">
+        <p class="meta-hint app-tips-lead">
+          Poster and tag lookup from TMDB works best when your files aren’t fighting the app. You don’t need a “correct” filename—just a little order goes a long way.
+        </p>
+        <ul class="app-tips-list">
+          <li><strong>Folders and Grouping</strong> — Keep a show (or a season) in its own folder when you can. It’s easier for the app to treat those files as one story than a single folder full of unrelated episodes.</li>
+          <li><strong>Batch Similar Things</strong> — Try one show—or one kind of thing, like all movies—per run instead of mixing everything together. Fewer wrong guesses, simpler metadata steps.</li>
+          <li><strong>Stay Consistent</strong> — If your names follow the same rough idea from file to file, automatic lookup usually behaves better. Wildly different labels every time means more hand-editing.</li>
+        </ul>
+        <p class="meta-tiny app-tips-foot">
+          How each button and screen works: <strong>Menu → Help</strong>.
+        </p>
+      </div>
+      <div class="meta-actions">
+        <button type="button" id="app-tips-close">Close</button>
+      </div>
+    </div>`;
+
+  const close = mountOverlay(overlay);
+  overlay.querySelector("#app-tips-close")!.addEventListener("click", close);
+}
+
 export function showHelpDialog(): void {
   const host = getHost();
   if (!host) return;
@@ -216,13 +405,55 @@ export function showHelpDialog(): void {
     <div class="meta-panel app-menu-dialog app-help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title">
       <h2 id="help-dialog-title">How Pod240 works</h2>
       <div class="app-help-body">
+        <p class="meta-tiny app-help-intro">
+          For folder layout and getting the most from TMDB, see <strong>Menu → Tips</strong>.
+        </p>
         <ol>
-          <li><strong>Add Videos</strong> — Drop files or folders on the drop zone, or use <strong>Select…</strong>. Outputs usually go next to each source file unless you set a default output folder (see below). Folders can mirror their layout under that folder. If a file has <strong>multiple audio tracks</strong>, you may be asked which track to use before the queue is filled. <strong>DRM-protected</strong> store purchases cannot be converted.</li>
-          <li><strong>Output Folder</strong> — Leave as <strong>Same as Source File</strong> or use <strong>Select…</strong> (and <strong>Clear</strong> to reset) so batch jobs go under one root (e.g. Show Name / Season …). Single-file drops still follow the usual naming rules next to the source or under the chosen folder.</li>
-          <li><strong>Metadata Dialog</strong> — First choose <strong>Add Metadata</strong> or <strong>Skip</strong>. Folders with several movies open one dialog per file (the button explains when another file follows). Use <strong>Back</strong> to return to the previous file or season. TV folders may use a step per season, then unparsed filenames if needed. Optional TMDB: <strong>Menu → Add TMDB API Key</strong> to paste or clear a key; in metadata, use <strong>Fetch Poster</strong> (cover) or <strong>Fetch Tags from TMDB</strong>. Atom names (©nam, stik, …) are summarized under <strong>Menu → Tag Reference</strong>. Choose <strong>Movie</strong> or <strong>TV Show</strong> so imports sort into Movies or TV Shows in iTunes; <strong>Skip</strong> (or Skip Tagging) often lands under <strong>Home Videos</strong>. <strong>Embedded cover:</strong> Pod240 can show a cover already in the file; you can choose not to carry it to the <strong>converted</strong> file only—<strong>original files are never modified</strong>.</li>
-          <li><strong>Music Video &amp; Covers</strong> — For <strong>Music Video</strong>, you can use <strong>Frame From Video</strong> to grab a still as cover art. If the in-app preview cannot decode your file, bundled <strong>FFmpeg</strong> next to the app (see <strong>About</strong>) enables scrubbing and capture.</li>
-          <li><strong>Queue Order</strong> — Jobs run <strong>one at a time</strong>. <strong>Drag</strong> the handle on pending rows to change order. <strong>Remove</strong> drops a pending job. <strong>Clear Queue</strong> removes finished, failed, cancelled, and pending rows but <strong>keeps the job currently encoding</strong>. <strong>Cancel Current</strong> stops the active encode. <strong>Burned-in subtitles:</strong> pick <code class="app-about-code">.srt</code> in metadata (sidecar files can be suggested automatically) or use <strong>SRT…</strong> on a pending row if you skipped metadata. Closing the app while something is encoding or waiting prompts you to confirm—progress and the queue are lost if you quit.</li>
-          <li><strong>Encode &amp; Log</strong> — Pod240 uses the Olsro <strong>240p30</strong> HandBrake preset for iPod Classic / Video. Tags from metadata are written after the encode (AtomicParsley). Warnings at the bottom of the window appear if HandBrake or AtomicParsley is missing; the collapsible <strong>Log</strong> shows status and errors.</li>
+          <li>
+            <strong>Add Videos</strong> — Drop files or folders on the drop zone, or use <strong>Select…</strong>.
+            Encodes usually land next to each source file unless you pick a default output folder (next step).
+            Folder drops can keep their layout under that output root.
+            If a file has <strong>multiple audio tracks</strong>, you may choose a track before the queue fills.
+            <strong>DRM-protected</strong> store purchases cannot be converted.
+          </li>
+          <li>
+            <strong>Output Folder</strong> — Leave <strong>Same as Source File</strong>, or use <strong>Select…</strong> (and <strong>Clear</strong> to reset) so batches share one root folder (for example show name / season).
+            Single files still follow the usual naming next to the source, or under the folder you chose.
+          </li>
+          <li>
+            <strong>Metadata</strong>
+            <ul class="app-help-nested">
+              <li><strong>Add Metadata</strong> or <strong>Skip</strong> at the start of the flow.</li>
+              <li><strong>Many movies in one folder:</strong> you get one dialog per file. The button text tells you when another file is next. <strong>Back</strong> returns to the previous file or TV season.</li>
+              <li><strong>TV folders:</strong> often one step per season, then a pass for filenames the app could not parse.</li>
+              <li><strong>TMDB:</strong> save an API key under <strong>Menu → TMDB API</strong>. In the dialog, use <strong>Fetch Poster</strong> or <strong>Fetch Tags from TMDB</strong>.</li>
+              <li><strong>What each field does:</strong> <strong>Menu → Tag Reference</strong> lists labels and the underlying tag names.</li>
+              <li><strong>Movie</strong> vs <strong>TV Show</strong> controls how your library sorts the file (Movies and TV vs other categories). Skipping tagging often lands under <strong>Home Videos</strong>.</li>
+              <li><strong>Embedded cover:</strong> you can show art already in the file and choose whether to copy it to the <strong>converted</strong> file only. <strong>Source files are never modified.</strong></li>
+            </ul>
+          </li>
+          <li>
+            <strong>Music Video &amp; Covers</strong> — For <strong>Music Video</strong>, use <strong>Frame From Video</strong> to grab a still as cover art.
+            If the built-in preview cannot decode the file, bundled <strong>FFmpeg</strong> (see <strong>About</strong>) powers scrubbing and capture.
+          </li>
+          <li>
+            <strong>Queue</strong>
+            <ul class="app-help-nested">
+              <li><strong>Overall progress</strong> under the header is for the whole queue, including the current encode’s percent.</li>
+              <li>Jobs run <strong>one at a time</strong>. <strong>Drag</strong> the handle on a pending row to reorder.</li>
+              <li><strong>Clear</strong> on a row removes that pending, finished, failed, or cancelled job—not the one currently encoding.</li>
+              <li><strong>Clear Queue</strong> clears finished, failed, cancelled, and pending rows but <strong>keeps the active encode</strong>.</li>
+              <li><strong>Cancel Current</strong> stops the encode in progress.</li>
+              <li><strong>Burned-in subtitles:</strong> choose a <code class="app-about-code">.srt</code> in metadata (sidecars may be suggested) or <strong>SRT…</strong> on a pending row if you skipped metadata.</li>
+              <li>Optional <strong>Discord</strong> webhook notifications (for example when the queue finishes or an encode fails): <strong>Menu → Notification</strong>.</li>
+              <li>Closing the app while something is encoding or waiting asks for confirmation. If you quit, queue progress is lost.</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Encode &amp; Log</strong> — Pod240 uses the Olsro <strong>240p30</strong> HandBrake preset for iPod Classic / Video.
+            Tags from metadata are applied after the encode (AtomicParsley).
+            Missing HandBrake or AtomicParsley shows a warning at the bottom. Open the collapsible <strong>Log</strong> for status and errors.
+          </li>
         </ol>
       </div>
       <div class="meta-actions">
@@ -337,7 +568,9 @@ function wireInAppMenu(appendLog: (s: string) => void): void {
   };
 
   bind("menu-item-tmdb", () => showTmdbKeyDialog(appendLog));
+  bind("menu-item-discord-notifications", () => showDiscordNotificationsDialog(appendLog));
   bind("menu-item-tag-ref", () => showTagReferenceDialog());
+  bind("menu-item-tips", () => showTipsDialog());
   bind("menu-item-help", () => showHelpDialog());
   bind("menu-item-about", () => showAboutDialog());
 }

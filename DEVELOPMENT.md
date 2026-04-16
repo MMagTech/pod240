@@ -4,7 +4,7 @@ Pod240 is a **Tauri 2** desktop app. This document is for **building from source
 
 ## Requirements
 
-1. **Rust** (e.g. [rustup](https://rustup.rs/)) and **Node.js 18+**.
+1. **Rust** (e.g. [rustup](https://rustup.rs/)) and **Node.js** (use a current **LTS** release; **18+** is fine).
 2. **HandBrake CLI** and **AtomicParsley** for a working encode + tagging pipeline.
 
    **Easiest (recommended):** download third-party CLIs into `src-tauri/resources/` automatically:
@@ -19,7 +19,21 @@ Pod240 is a **Tauri 2** desktop app. This document is for **building from source
 
    HandBrake is **GPLv2** — see [THIRD_PARTY.md](THIRD_PARTY.md).
 
-3. **FFmpeg** and **ffprobe** for music-video frame preview: keep them in **`src-tauri/resources/ffmpeg/`** (same layout as shipped **`resources/ffmpeg`**). They are **bundled with release builds** and **committed for Windows** in this repo; `npm run vendor:release` does **not** download them—copy from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) / [evermeet.cx](https://evermeet.cx/ffmpeg/) per [`resources/ffmpeg/README.txt`](src-tauri/resources/ffmpeg/README.txt) if your checkout is missing them (e.g. macOS CI). Override at runtime with **`POD240_FFMPEG`** if needed.
+3. **FFmpeg** and **ffprobe** for music-video frame preview: keep them in **`src-tauri/resources/ffmpeg/`** (same layout as shipped **`resources/ffmpeg`**). They are **bundled with release builds** when present and **committed for Windows** in this repo; `npm run vendor:release` does **not** download them—copy from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) / [evermeet.cx](https://evermeet.cx/ffmpeg/) per [`resources/ffmpeg/README.txt`](src-tauri/resources/ffmpeg/README.txt) if your checkout is missing them (e.g. macOS CI). Override at runtime with **`POD240_FFMPEG`** if needed. License: see [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Settings file (development)
+
+End-user preferences live in **`pod240-settings.json`** next to the built executable (same as in [README.md](README.md)). The JSON may include:
+
+| Field | Meaning |
+| --- | --- |
+| `default_output_dir` | Optional default folder for converted files. |
+| `tmdb_api_key` | Optional TMDB key for artwork/metadata search. |
+| `apprise_notify_url` | Optional Discord **incoming webhook** URL (`https://discord.com/api/webhooks/…`). |
+| `apprise_notify_on_queue_done` | When `true`, send a Discord message when the queue becomes empty after work. |
+| `apprise_notify_on_encode_failed` | When `true`, send a Discord message when an encode fails. |
+
+Configure Discord webhooks in the app via **Menu → Notification** (no separate Apprise server; the field name is historical).
 
 ## Run in development
 
@@ -52,14 +66,14 @@ Official **Windows** and **macOS** installers are built in [GitHub Actions](.git
 
 1. Bump the version consistently in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (same semver as the tag, without the `v` prefix).
 2. Commit and push to `main` (or your default branch) as usual.
-3. Tag and push:
+3. Tag and push (use the same version as in `package.json` / `Cargo.toml` / `tauri.conf.json`, with a `v` prefix on the tag):
 
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
 
-   Use your real version instead of `0.1.0`.
+   Replace `0.1.1` with your release version.
 
 The workflow runs on that tag, builds **Windows (x64)** and **macOS (Apple Silicon + Intel)** artifacts, creates or updates a **GitHub Release** for that tag, and attaches the bundles.
 
@@ -69,7 +83,7 @@ After the workflow finishes, open the repository’s **Releases** page on GitHub
 
 ### Unsigned builds
 
-These release artifacts are **not** code-signed or notarized. Windows may show **SmartScreen**; on macOS you may need to **right‑click → Open** the first time. This is normal for hobby/open-source builds until you add signing.
+These release artifacts are **not** Apple **notarized** or signed with a paid **Developer ID** certificate. Windows may show **SmartScreen**. On **macOS**, Gatekeeper may block the app or show messages that sound like the download is “damaged”; **right‑click → Open** on the app (or allow under **System Settings → Privacy & Security**) is the usual workaround for unsigned open-source builds. Ad-hoc or self-signed setups do not replace notarization for broad “download and double‑click” trust.
 
 ### Repo settings
 

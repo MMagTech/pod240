@@ -1,6 +1,8 @@
+mod discord_webhook;
 mod audio_probe;
 mod embedded_artwork;
 mod ffmpeg_frame;
+mod hidden_command;
 mod musicbrainz;
 mod subtitle_sidecar;
 mod tagging;
@@ -65,6 +67,13 @@ struct Settings {
     /// The Movie Database API key (optional; for poster search in the UI).
     #[serde(default)]
     tmdb_api_key: Option<String>,
+    /// Discord incoming webhook URL (`https://discord.com/api/webhooks/…`, optional).
+    #[serde(default)]
+    apprise_notify_url: Option<String>,
+    #[serde(default)]
+    apprise_notify_on_queue_done: bool,
+    #[serde(default)]
+    apprise_notify_on_encode_failed: bool,
 }
 
 struct AppInner {
@@ -160,6 +169,7 @@ pub(crate) fn resources_root(app: &AppHandle) -> Result<PathBuf, String> {
 /// Runs `exe --version`; merges stdout and stderr (HandBrake logs to stderr, prints `HandBrake x.y` on stdout).
 fn read_cli_version_output(exe: &Path, cwd: Option<&Path>) -> Option<String> {
     let mut cmd = Command::new(exe);
+    crate::hidden_command::hide_console(&mut cmd);
     cmd.arg("--version");
     if let Some(d) = cwd {
         cmd.current_dir(d);
@@ -211,6 +221,7 @@ fn pick_ffmpeg_version_line(text: &str) -> Option<String> {
 
 fn read_ffmpeg_version_output(exe: &Path, cwd: Option<&Path>) -> Option<String> {
     let mut cmd = Command::new(exe);
+    crate::hidden_command::hide_console(&mut cmd);
     cmd.arg("-version");
     if let Some(d) = cwd {
         cmd.current_dir(d);
@@ -449,6 +460,24 @@ fn canonical_key(path: &str) -> String {
         .unwrap_or_else(|_| path.to_lowercase())
 }
 
+/// Same source path may not be enqueued twice while **pending** or **encoding**; finished rows do not block.
+fn status_blocks_duplicate_enqueue(status: &JobStatus) -> bool {
+    matches!(status, JobStatus::Pending | JobStatus::Encoding)
+}
+
+/// Remove failed/done/cancelled rows for this path so re-adding after failure does not stack duplicates.
+fn remove_stale_jobs_for_path(jobs: &mut Vec<Job>, key: &str) {
+    jobs.retain(|j| {
+        if canonical_key(&j.source_path) != key {
+            return true;
+        }
+        !matches!(
+            j.status,
+            JobStatus::Done | JobStatus::Failed | JobStatus::Cancelled
+        )
+    });
+}
+
 fn audio_track_lookup(map: &HashMap<String, u32>, source_path: &str) -> Option<u32> {
     map.get(source_path)
         .copied()
@@ -613,6 +642,43 @@ fn set_tmdb_api_key(key: Option<String>) -> Result<(), String> {
     save_settings(&s)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscordNotificationsPayload {
+    url: Option<String>,
+    on_queue_done: bool,
+    on_encode_failed: bool,
+}
+
+#[tauri::command]
+fn set_discord_notifications(payload: DiscordNotificationsPayload) -> Result<(), String> {
+    let trimmed = payload.url.and_then(|u| {
+        let t = u.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    });
+    if let Some(ref u) = trimmed {
+        discord_webhook::validate_discord_webhook_url(u)?;
+    }
+    let mut s = load_settings();
+    s.apprise_notify_url = trimmed;
+    s.apprise_notify_on_queue_done = payload.on_queue_done;
+    s.apprise_notify_on_encode_failed = payload.on_encode_failed;
+    save_settings(&s)
+}
+
+#[tauri::command]
+fn discord_send_test(url: String) -> Result<(), String> {
+    let t = url.trim();
+    if t.is_empty() {
+        return Err("Enter a Discord webhook URL.".into());
+    }
+    discord_webhook::send_blocking(t, "Pod240", "Test Message From Pod240.", "info")
+}
+
 #[tauri::command]
 fn analyze_inputs(paths: Vec<String>) -> Result<AnalyzeResult, String> {
     let expanded = expand_input_paths(paths)?;
@@ -678,6 +744,7 @@ fn enqueue_with_tags(
         let mut seen: HashSet<String> = g
             .jobs
             .iter()
+            .filter(|j| status_blocks_duplicate_enqueue(&j.status))
             .map(|j| canonical_key(&j.source_path))
             .collect();
 
@@ -687,6 +754,7 @@ fn enqueue_with_tags(
                 skipped += 1;
                 continue;
             }
+            remove_stale_jobs_for_path(&mut g.jobs, &key);
             seen.insert(key.clone());
             if !Path::new(&item.source_path).exists() {
                 continue;
@@ -816,14 +884,13 @@ fn remove_job(app: AppHandle, state: State<'_, AppState>, job_id: String) -> Res
     {
         let mut g = state.0.lock().map_err(|e| e.to_string())?;
         if let Some(j) = g.jobs.iter().find(|j| j.id == job_id) {
-            if !matches!(j.status, JobStatus::Pending) {
-                return Err("Only pending jobs can be removed".into());
+            if matches!(j.status, JobStatus::Encoding) {
+                return Err("Cannot remove the job that is currently encoding.".into());
             }
         } else {
             return Err("Job not found".into());
         }
-        g.jobs
-            .retain(|j| !(j.id == job_id && matches!(j.status, JobStatus::Pending)));
+        g.jobs.retain(|j| j.id != job_id);
     }
     emit_queue(&app, state.deref())
 }
@@ -899,6 +966,7 @@ fn enqueue(app: AppHandle, state: State<'_, AppState>, req: EnqueueRequest) -> R
         let mut seen: HashSet<String> = g
             .jobs
             .iter()
+            .filter(|j| status_blocks_duplicate_enqueue(&j.status))
             .map(|j| canonical_key(&j.source_path))
             .collect();
 
@@ -908,6 +976,7 @@ fn enqueue(app: AppHandle, state: State<'_, AppState>, req: EnqueueRequest) -> R
                 skipped += 1;
                 continue;
             }
+            remove_stale_jobs_for_path(&mut g.jobs, &key);
             seen.insert(key.clone());
             if !Path::new(&item.source_path).exists() {
                 continue;
@@ -994,6 +1063,34 @@ fn update_job(
 }
 
 
+/// When every job is terminal (Done / Failed / Cancelled) and none are still pending or encoding.
+/// Returns `(done, failed, cancelled)` counts, or `None` if the queue is empty or still busy.
+fn queue_finished_counts(state: &AppState) -> Option<(usize, usize, usize)> {
+    let g = state.0.lock().ok()?;
+    if g.jobs.is_empty() {
+        return None;
+    }
+    if g
+        .jobs
+        .iter()
+        .any(|j| matches!(j.status, JobStatus::Pending | JobStatus::Encoding))
+    {
+        return None;
+    }
+    let mut done = 0usize;
+    let mut failed = 0usize;
+    let mut cancelled = 0usize;
+    for j in &g.jobs {
+        match j.status {
+            JobStatus::Done => done += 1,
+            JobStatus::Failed => failed += 1,
+            JobStatus::Cancelled => cancelled += 1,
+            JobStatus::Pending | JobStatus::Encoding => return None,
+        }
+    }
+    Some((done, failed, cancelled))
+}
+
 fn finish_encoding_attempt(
     app: AppHandle,
     state: AppState,
@@ -1006,6 +1103,8 @@ fn finish_encoding_attempt(
         .lock()
         .map(|g| g.cancel_requested)
         .unwrap_or(false);
+
+    let mut encode_failed_notice: Option<(String, String)> = None;
 
     let _ = {
         let mut g = match state.0.lock() {
@@ -1034,9 +1133,12 @@ fn finish_encoding_attempt(
                             j.progress = None;
                             j.error = None;
                         } else {
+                            let path = j.source_path.clone();
+                            let err = e.clone();
                             j.status = JobStatus::Failed;
                             j.progress = None;
                             j.error = Some(e);
+                            encode_failed_notice = Some((path, err));
                         }
                     }
                 }
@@ -1046,6 +1148,29 @@ fn finish_encoding_attempt(
 
     let _ = emit_queue(&app, &state);
     let _ = try_start_next_job(app.clone(), state.clone(), default_out_next);
+
+    let settings = load_settings();
+    let Some(url_raw) = settings
+        .apprise_notify_url
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    else {
+        return;
+    };
+    let url_owned = url_raw.to_string();
+
+    if settings.apprise_notify_on_encode_failed {
+        if let Some((path, err)) = encode_failed_notice {
+            discord_webhook::maybe_notify_encode_failed(&url_owned, &path, &err);
+        }
+    }
+
+    if settings.apprise_notify_on_queue_done {
+        if let Some((done, failed, cancelled)) = queue_finished_counts(&state) {
+            discord_webhook::maybe_notify_queue_finished(&url_owned, done, failed, cancelled);
+        }
+    }
 }
 
 /// HandBrakeCLI prints encoding progress on **stdout**, using `\r` to redraw one line (not
@@ -1118,6 +1243,7 @@ fn run_one_job(app: AppHandle, state: AppState, job: Job, default_out: Option<Pa
 
         // Match standalone HandBrake: preset JSON carries container (`FileFormat`), encoders, and all tunables.
         let mut cmd = Command::new(&hb_exe);
+        crate::hidden_command::hide_console(&mut cmd);
         cmd.current_dir(&workdir)
             .arg("--preset-import-file")
             .arg(&preset_file)
@@ -1273,6 +1399,8 @@ pub fn run() {
             get_settings,
             set_default_output_dir,
             set_tmdb_api_key,
+            set_discord_notifications,
+            discord_send_test,
             analyze_inputs,
             probe_source_audio,
             probe_sidecar_subtitle,

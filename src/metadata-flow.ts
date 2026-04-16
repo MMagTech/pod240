@@ -75,7 +75,9 @@ export async function runMetadataWizard(
         const moreSeasonsAhead = si < seasonGroups.length - 1;
         const baseSeasonLine =
           totalSeasonSteps > 1
-            ? `Season ${group.season} of ${totalSeasonSteps} (${subset.length} file(s)).`
+            ? `Season ${group.season} of ${totalSeasonSteps} — ${subset.length} file${
+                subset.length === 1 ? "" : "s"
+              }.`
             : "One season — shared show name and cover. Episode numbers are per file.";
 
         const hintParts: string[] = [];
@@ -85,11 +87,9 @@ export async function runMetadataWizard(
           );
         }
         hintParts.push(baseSeasonLine);
-        if (moreSeasonsAhead) {
-          hintParts.push("After you confirm, the next season step opens.");
-        } else if (unparsedFileIndices.length > 0) {
+        if (!moreSeasonsAhead && unparsedFileIndices.length > 0) {
           hintParts.push("After you confirm, unparsed filenames are listed next.");
-        } else {
+        } else if (!moreSeasonsAhead) {
           hintParts.push("Last tagging step for this folder — then all jobs are added to the queue together.");
         }
         const stepHint = hintParts.join(" ");

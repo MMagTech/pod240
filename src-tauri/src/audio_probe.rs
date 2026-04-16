@@ -136,7 +136,9 @@ pub fn probe_source_audio(
     workdir: &Path,
     source: &Path,
 ) -> Result<Vec<AudioTrack>, String> {
-    let out = Command::new(hb_exe)
+    let mut cmd = Command::new(hb_exe);
+    crate::hidden_command::hide_console(&mut cmd);
+    let out = cmd
         .current_dir(workdir)
         .arg("-i")
         .arg(source)
