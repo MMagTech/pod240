@@ -7,7 +7,7 @@
 
 Pod240 is a drag-and-drop **desktop app** (**Windows** / **macOS**) that converts modern video files into the **240p MP4** format that **iPod Classic** and **iPod Video (5th gen)** can play. It drives **HandBrake CLI** with the community **“Apple 240p30”** preset ([Olsro](https://github.com/Olsro/reddit-ipod-guides)) and can apply **iTunes-style metadata** after each encode.
 
-**Why it exists:** getting video onto an iPod Classic in 2026 is awkward. Pod240 makes it mostly **drop, queue, encode**.
+**Why it exists:** Getting video iPod Video/Classic in 2026 is awkward. Pod240 makes it mostly **drop, queue, encode**.
 
 <table>
   <tr>
@@ -129,9 +129,10 @@ Discord stores only the webhook URL and your toggle choices; messages send only 
 
 ## Credits & Licenses
 
-- Preset lineage and community context: **Olsro** / [reddit-ipod-guides](https://github.com/Olsro/reddit-ipod-guides).
-- Third-party components: **[THIRD_PARTY.md](THIRD_PARTY.md)**.
-- Pod240 application license: **[LICENSE](LICENSE)**.
+- Preset Lineage and Community Context: **Olsro** / [reddit-ipod-guides](https://github.com/Olsro/reddit-ipod-guides).
+- Windows Handbrake Codec Support: **FT129** / [fdk-ACC](https://github.com/FT129/Handbrake-and-FFmpeg-with-fdk-aac))
+- Third-party Components: **[THIRD_PARTY.md](THIRD_PARTY.md)**.
+- Pod240 Application License: **[LICENSE](LICENSE)**.
 
 ## Contributing & Issues
 
