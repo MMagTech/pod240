@@ -12,13 +12,24 @@ Pod240 is a drag-and-drop **desktop app** (**Windows** / **macOS**) that convert
 <table>
   <tr>
     <td align="center" width="33%">
-      <img src="assets/Screenshot%202026-04-17%20065712.png" alt="Pod240 — main window" width="260" />
+      <img src="assets/Screenshot%202026-04-17%20065712.png" alt="Pod240 main window: drop zone, output folder, and empty queue" width="260" />
     </td>
     <td align="center" width="33%">
-      <img src="assets/Screenshot%202026-04-17%20065749.png" alt="Pod240 — queue and controls" width="260" />
+      <img src="assets/Screenshot%202026-04-17%20065749.png" alt="TV batch metadata: TMDB poster match, season tagging, and episode table" width="260" />
     </td>
     <td align="center" width="33%">
-      <img src="assets/Screenshot%202026-04-17%20065856.png" alt="Pod240 — metadata / workflow" width="260" />
+      <img src="assets/Screenshot%202026-04-17%20065856.png" alt="Queue during encode: overall progress, Friends episodes, subtitles and reorder controls" width="260" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20071625.png" alt="Music Video metadata: MusicBrainz matches, song and artist fields, optional tags" width="260" />
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20071810.png" alt="Discord notifications: webhook URL, queue finished and encode failure toggles" width="260" />
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20071826.png" alt="TMDB API key dialog for poster and tag fetch in metadata screens" width="260" />
     </td>
   </tr>
 </table>
