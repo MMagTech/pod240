@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { open } from "@tauri-apps/plugin-dialog";
 import { setupAppMenu } from "./app-menu";
 import { setupExternalLinkDelegation } from "./open-external";
 import { hideBusy, showBusy, showCheckingAudioTracks, updateBusyProgress } from "./busy-overlay";
@@ -47,11 +47,6 @@ const queueTotalProgressBar = document.getElementById("queue-total-progress-bar"
 const queueTotalProgressLabel = document.getElementById("queue-total-progress-label") as HTMLSpanElement;
 
 let jobs: Job[] = [];
-
-/** Pending or encoding jobs — closing would interrupt work or drop the queue. */
-function queueNeedsCloseConfirmation(): boolean {
-  return jobs.some((j) => j.status === "pending" || j.status === "encoding");
-}
 
 /**
  * WebView2 often fails to deliver pointer moves after setPointerCapture.
@@ -428,7 +423,7 @@ function setupDropzone() {
     dropzone.classList.remove("dragover");
   });
 
-  void getCurrentWindow()
+  void getCurrentWebviewWindow()
     .onDragDropEvent((event) => {
       if (event.payload.type === "over") {
         dropzone.classList.add("dragover");
@@ -542,18 +537,4 @@ void (async () => {
   }
 
   await refreshQueue();
-
-  void getCurrentWindow()
-    .onCloseRequested(async (event) => {
-      if (!queueNeedsCloseConfirmation()) return;
-      event.preventDefault();
-      const ok = await confirm(
-        "Current encode progress and queue will be lost. Select Okay to close or Cancel to return to app.",
-        { title: "Quit Pod240?", kind: "warning" }
-      );
-      if (ok) {
-        await getCurrentWindow().destroy();
-      }
-    })
-    .catch(() => {});
 })();

@@ -4,7 +4,6 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { hideBusy } from "./busy-overlay";
-import { dbgSession } from "./debug-session-log";
 import { attachConfirmedBackdropDismiss } from "./modal-backdrop";
 
 export interface AudioTrack {
@@ -105,12 +104,6 @@ export async function pickAudioTracksForSources(
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // #region agent log
-        dbgSession("H1", "audio-track-modal:keydown", "Escape → cancel audio pick", {
-          code: e.code,
-          targetTag: (e.target as HTMLElement | null)?.tagName ?? "",
-        });
-        // #endregion
         done(null);
       }
     };

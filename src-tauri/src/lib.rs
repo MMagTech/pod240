@@ -19,7 +19,8 @@ use std::thread;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 pub use tagging::{AnalyzeResult, AnalyzedFile, EmbeddableTags, EpisodeParseInfo, SeasonGroupPreview};
 
@@ -1419,6 +1420,39 @@ pub fn run() {
             let state = app.state::<AppState>().deref().clone();
             if let Err(e) = emit_queue(&handle, &state) {
                 eprintln!("emit initial queue: {e}");
+            }
+
+            // Quit confirmation in Rust (v0.1.1+): avoids JS `confirm()` during `close-requested`,
+            // which can leave the window stuck after `prevent_close`.
+            if let Some(win) = app.get_webview_window("main") {
+                let queue_state = app.state::<AppState>().deref().clone();
+                let dialog_app = handle.clone();
+                let win_for_destroy = win.clone();
+                win.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        let needs_confirm = {
+                            let inner = queue_state.0.lock().unwrap();
+                            inner.jobs.iter().any(|j| {
+                                matches!(j.status, JobStatus::Pending | JobStatus::Encoding)
+                            })
+                        };
+                        if needs_confirm {
+                            api.prevent_close();
+                            let w = win_for_destroy.clone();
+                            dialog_app
+                                .dialog()
+                                .message("Current encode progress and queue will be lost. Select OK to close or Cancel to return to app.")
+                                .title("Quit Pod240?")
+                                .kind(MessageDialogKind::Warning)
+                                .buttons(MessageDialogButtons::OkCancel)
+                                .show(move |ok| {
+                                    if ok {
+                                        let _ = w.destroy();
+                                    }
+                                });
+                        }
+                    }
+                });
             }
             Ok(())
         })

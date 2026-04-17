@@ -4,7 +4,6 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { dbgSession } from "./debug-session-log";
 import {
   applyCommonTagFields,
   commonTagFieldsHtml,
@@ -1244,36 +1243,7 @@ export function promptSingleFileMetadata(
       }
     });
 
-    const onFocusIn = (e: FocusEvent) => {
-      const t = e.target as Node;
-      if (overlay.contains(t)) return;
-      // #region agent log
-      dbgSession("H3", "promptSingleFile:focusin", "focus moved outside overlay", {
-        tag: (t as HTMLElement).tagName ?? "",
-        id: (t as HTMLElement).id ?? "",
-      });
-      // #endregion
-    };
-    const onKeyDebug = (e: KeyboardEvent) => {
-      if (!overlay.isConnected) return;
-      if (e.key !== "Enter") return;
-      // #region agent log
-      dbgSession("H4", "promptSingleFile:keydown(capture)", "Enter", {
-        targetTag: (e.target as HTMLElement | null)?.tagName ?? "",
-        activeTag: document.activeElement?.tagName ?? "",
-        activeId: (document.activeElement as HTMLElement | null)?.id ?? "",
-      });
-      // #endregion
-    };
-    document.addEventListener("focusin", onFocusIn, true);
-    document.addEventListener("keydown", onKeyDebug, true);
-
-    function cleanup(v: SingleFileMetadataResult, closedVia?: string) {
-      // #region agent log
-      dbgSession("H5", "promptSingleFile:cleanup", closedVia ?? "unknown", {
-        resultType: v.type,
-      });
-      // #endregion
+    function cleanup(v: SingleFileMetadataResult) {
       framePicker.unload();
       removeAll();
       modalHost.innerHTML = "";
@@ -1282,20 +1252,18 @@ export function promptSingleFileMetadata(
 
     const removeDismissOnly = attachModalDismiss(
       overlay,
-      (reason) => cleanup({ type: "cancel" }, `dismiss_${reason}`),
+      (_reason) => cleanup({ type: "cancel" }),
       "singleFile"
     );
 
     function removeAll() {
       removeDismissOnly();
-      document.removeEventListener("focusin", onFocusIn, true);
-      document.removeEventListener("keydown", onKeyDebug, true);
     }
 
-    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }, "cancel_btn"));
+    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }));
     metaBackBtn.addEventListener("click", () => {
       if (!allowBack) return;
-      cleanup({ type: "back" }, "back_btn");
+      cleanup({ type: "back" });
     });
 
     overlay.querySelector("#meta-ok")!.addEventListener("click", () => {
@@ -1315,18 +1283,15 @@ export function promptSingleFileMetadata(
             : undefined;
 
       if (kind === "skip") {
-        cleanup(
-          {
-            type: "tagged",
-            item: {
-              sourcePath: file.sourcePath,
-              treeRoot: file.treeRoot,
-              tags: { kind: "skip" },
-              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
-            },
+        cleanup({
+          type: "tagged",
+          item: {
+            sourcePath: file.sourcePath,
+            treeRoot: file.treeRoot,
+            tags: { kind: "skip" },
+            ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
           },
-          "ok_skip"
-        );
+        });
         return;
       }
 
@@ -1353,83 +1318,74 @@ export function promptSingleFileMetadata(
       else delete common.genre;
 
       if (kind === "movie") {
-        cleanup(
-          {
-            type: "tagged",
-            item: {
-              sourcePath: file.sourcePath,
-              treeRoot: file.treeRoot,
-              tags: {
-                kind: "movie",
-                title: mvTitle.value.trim() || stem(file.sourcePath),
-                year: mvYear.value ? Number(mvYear.value) : undefined,
-                artworkBase64: art,
-                ...common,
-              },
-              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
-              ...omitOut,
-            },
-          },
-          "ok_movie"
-        );
-        return;
-      }
-
-      if (kind === "tv") {
-        cleanup(
-          {
-            type: "tagged",
-            item: {
-              sourcePath: file.sourcePath,
-              treeRoot: file.treeRoot,
-              tags: {
-                kind: "tv",
-                showName: tvShow.value.trim() || stem(file.sourcePath),
-                season: Number(tvSeas.value) || 1,
-                episode: Number(tvEp.value) || 1,
-                episodeTitle: tvEtitle.value.trim() || undefined,
-                artworkBase64: art,
-                episodeId:
-                  tvEpid.value.trim() ||
-                  formatTvEpisodeSortId(
-                    Number(tvSeas.value) || 0,
-                    Math.max(1, Number(tvEp.value) || 1)
-                  ),
-                tvNetwork: tvNet.value.trim() || undefined,
-                sortShow: tvSorts.value.trim() || undefined,
-                ...common,
-              },
-              ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
-              ...omitOut,
-            },
-          },
-          "ok_tv"
-        );
-        return;
-      }
-
-      cleanup(
-        {
+        cleanup({
           type: "tagged",
           item: {
             sourcePath: file.sourcePath,
             treeRoot: file.treeRoot,
             tags: {
-              kind: "musicVideo",
-              title: mvvSong.value.trim() || stem(file.sourcePath),
-              artist: mvvArtist.value.trim() || "Unknown Artist",
+              kind: "movie",
+              title: mvTitle.value.trim() || stem(file.sourcePath),
+              year: mvYear.value ? Number(mvYear.value) : undefined,
               artworkBase64: art,
-              albumArtist: mvvAart.value.trim() || undefined,
-              album: mvvAlbum.value.trim() || undefined,
-              composer: (overlay.querySelector("#meta-common-composer") as HTMLInputElement | null)?.value.trim() || undefined,
-              compilation: mvvCpil.checked ? true : undefined,
               ...common,
             },
+            ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
             ...omitOut,
           },
+        });
+        return;
+      }
+
+      if (kind === "tv") {
+        cleanup({
+          type: "tagged",
+          item: {
+            sourcePath: file.sourcePath,
+            treeRoot: file.treeRoot,
+            tags: {
+              kind: "tv",
+              showName: tvShow.value.trim() || stem(file.sourcePath),
+              season: Number(tvSeas.value) || 1,
+              episode: Number(tvEp.value) || 1,
+              episodeTitle: tvEtitle.value.trim() || undefined,
+              artworkBase64: art,
+              episodeId:
+                tvEpid.value.trim() ||
+                formatTvEpisodeSortId(
+                  Number(tvSeas.value) || 0,
+                  Math.max(1, Number(tvEp.value) || 1)
+                ),
+              tvNetwork: tvNet.value.trim() || undefined,
+              sortShow: tvSorts.value.trim() || undefined,
+              ...common,
+            },
+            ...(subBurn ? { subtitleBurnPath: subBurn } : {}),
+            ...omitOut,
+          },
+        });
+        return;
+      }
+
+      cleanup({
+        type: "tagged",
+        item: {
+          sourcePath: file.sourcePath,
+          treeRoot: file.treeRoot,
+          tags: {
+            kind: "musicVideo",
+            title: mvvSong.value.trim() || stem(file.sourcePath),
+            artist: mvvArtist.value.trim() || "Unknown Artist",
+            artworkBase64: art,
+            albumArtist: mvvAart.value.trim() || undefined,
+            album: mvvAlbum.value.trim() || undefined,
+            composer: (overlay.querySelector("#meta-common-composer") as HTMLInputElement | null)?.value.trim() || undefined,
+            compilation: mvvCpil.checked ? true : undefined,
+            ...common,
+          },
+          ...omitOut,
         },
-        "ok_musicVideo"
-      );
+      });
     });
 
     refreshSections();
@@ -2033,10 +1989,7 @@ export function promptTvSeasonGroupBatch(
       }
     });
 
-    function cleanup(v: BatchMetadataResult, closedVia?: string) {
-      // #region agent log
-      dbgSession("H5", "tvBatch:cleanup", closedVia ?? "unknown", { resultType: v.type });
-      // #endregion
+    function cleanup(v: BatchMetadataResult) {
       removeDismiss();
       modalHost.innerHTML = "";
       resolve(v);
@@ -2044,12 +1997,12 @@ export function promptTvSeasonGroupBatch(
 
     const removeDismiss = attachModalDismiss(
       overlay,
-      (reason) => cleanup({ type: "cancel" }, `dismiss_${reason}`),
+      (_reason) => cleanup({ type: "cancel" }),
       "tvBatch"
     );
 
-    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }, "cancel_btn"));
-    tvBackBtn.addEventListener("click", () => cleanup({ type: "back" }, "back_btn"));
+    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }));
+    tvBackBtn.addEventListener("click", () => cleanup({ type: "back" }));
 
     overlay.querySelector("#meta-ok")!.addEventListener("click", () => {
       const show = tvBatchShow.value.trim();
@@ -2116,7 +2069,7 @@ export function promptTvSeasonGroupBatch(
           ...omitOut,
         });
       }
-      cleanup({ type: "tagged", items }, "ok_confirm");
+      cleanup({ type: "tagged", items });
     });
   });
 }
@@ -2681,10 +2634,7 @@ export function promptTvUnparsedOrphans(
       }
     });
 
-    function cleanup(v: BatchMetadataResult, closedVia?: string) {
-      // #region agent log
-      dbgSession("H5", "tvOrphan:cleanup", closedVia ?? "unknown", { resultType: v.type });
-      // #endregion
+    function cleanup(v: BatchMetadataResult) {
       removeDismiss();
       modalHost.innerHTML = "";
       resolve(v);
@@ -2692,12 +2642,12 @@ export function promptTvUnparsedOrphans(
 
     const removeDismiss = attachModalDismiss(
       overlay,
-      (reason) => cleanup({ type: "cancel" }, `dismiss_${reason}`),
+      (_reason) => cleanup({ type: "cancel" }),
       "tvOrphan"
     );
 
-    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }, "cancel_btn"));
-    orphBackBtn.addEventListener("click", () => cleanup({ type: "back" }, "back_btn"));
+    overlay.querySelector("#meta-cancel")!.addEventListener("click", () => cleanup({ type: "cancel" }));
+    orphBackBtn.addEventListener("click", () => cleanup({ type: "back" }));
 
     overlay.querySelector("#meta-ok")!.addEventListener("click", () => {
       const show = tvOrphShow.value.trim();
@@ -2764,7 +2714,7 @@ export function promptTvUnparsedOrphans(
           ...omitOut,
         });
       }
-      cleanup({ type: "tagged", items }, "ok_confirm");
+      cleanup({ type: "tagged", items });
     });
   });
 }

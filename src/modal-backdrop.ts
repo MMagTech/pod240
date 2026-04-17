@@ -1,5 +1,3 @@
-import { dbgSession } from "./debug-session-log";
-
 /**
  * Backdrop dismiss only when the same gesture started on the overlay.
  * Prevents closing when the user finishes a text-selection drag with mouseup on the dimmed area
@@ -8,7 +6,7 @@ import { dbgSession } from "./debug-session-log";
 export function attachConfirmedBackdropDismiss(
   overlay: HTMLElement,
   onBackdrop: () => void,
-  ctx: string
+  _ctx: string
 ): () => void {
   let pointerDownOnBackdrop = false;
 
@@ -20,16 +18,8 @@ export function attachConfirmedBackdropDismiss(
   const onBackdropClick = (e: MouseEvent) => {
     if (e.target !== overlay) return;
     if (!pointerDownOnBackdrop) {
-      // #region agent log
-      dbgSession("H2-suppressed", `${ctx}:backdrop`, "ignored (pointerdown not on backdrop)", {});
-      // #endregion
       return;
     }
-    // #region agent log
-    dbgSession("H2", `${ctx}:backdrop`, "backdrop click → cancel", {
-      pointerType: (e as PointerEvent & { pointerType?: string }).pointerType ?? "",
-    });
-    // #endregion
     onBackdrop();
   };
   overlay.addEventListener("click", onBackdropClick);

@@ -1,51 +1,112 @@
 # Pod240
 
-**Pod240** is a small desktop app for **Windows** and **macOS** that converts videos for **iPod Classic** and **iPod Video (5th gen)** using the community **Olsro “Apple 240p30”** HandBrake preset. For background on why 240p and how it fits iPod limits, see [Olsro’s iPod encode guide](https://github.com/Olsro/reddit-ipod-guides/blob/main/guides/ipod-encode-240p-video-content.md).
+[![Latest release](https://img.shields.io/github/v/release/MMagTech/pod240?label=release&logo=github)](https://github.com/MMagTech/pod240/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](#requirements--compatibility)
+[![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri)](https://tauri.app/)
 
-**Developers** building from source: see [DEVELOPMENT.md](DEVELOPMENT.md).
+Pod240 is a drag-and-drop **desktop app** (**Windows** / **macOS**) that converts modern video files into the **240p MP4** format that **iPod Classic** and **iPod Video (5th gen)** can play. It drives **HandBrake CLI** with the community **“Apple 240p30”** preset ([Olsro](https://github.com/Olsro/reddit-ipod-guides)) and can apply **iTunes-style metadata** after each encode.
 
-## Download and install
+**Why it exists:** getting video onto an iPod Classic in 2026 is awkward. Pod240 makes it mostly **drop, queue, encode**.
 
-Get the latest **Windows** or **macOS** build from the project’s **Releases** page on GitHub (`https://github.com/<owner>/<repo>/releases`). You do **not** need to install Rust, Node.js, or HandBrake by hand for a normal release install—the app bundles what it needs to encode and tag.
+![Pod240 main window — add assets/readme-screenshot.png to show your UI on GitHub](assets/readme-screenshot.png)
+
+*Until you add [`assets/readme-screenshot.png`](assets/README.md), the image above may not render. See [assets/README.md](assets/README.md).*
+
+## Features
+
+- **Queue** — Drag-and-drop or file picker; **reorder** pending jobs; one encode **at a time** for predictable behavior.
+- **Metadata (optional)** — Movie, TV, and music-video flows with **TMDB** (posters, tags) and related helpers; skip entirely if you only want video.
+- **Tags** — iTunes-style tags on the finished `.mp4` via **AtomicParsley** when you use metadata.
+- **Discord** — Optional **incoming webhook** notifications (queue finished / encode failed) under **Menu → Notification**.
+- **Updates** — **Menu → Check for Updates** compares your build to the **latest GitHub release** (manual only; no background polling).
+- **Portable settings** — Preferences live in **`pod240-settings.json`** next to the executable (no Windows Registry).
+- **Music video covers** — **Frame from video** and scrubbing use bundled **FFmpeg/ffprobe** when the built-in preview cannot decode a file (see [Bundled tools](#bundled-tools)).
+- **Safe queue UX** — Closing the app while work is pending warns you; cancel and clear behave as labeled in the UI.
+
+**Developers:** [DEVELOPMENT.md](DEVELOPMENT.md) · **Third-party licenses:** [THIRD_PARTY.md](THIRD_PARTY.md)
+
+## Requirements & compatibility
+
+| | |
+| --- | --- |
+| **OS** | **Windows** 10 or later (x64). **macOS** recent releases — install **Apple Silicon** or **Intel** builds from [Releases](https://github.com/MMagTech/pod240/releases/latest) (artifacts are built per architecture). |
+| **Output** | Typically **H.264** video and **AAC** audio in an **`.mp4`** container at **240p** / **~30 fps** per the Olsro **240p30** preset (details and limits: [Olsro’s encode guide](https://github.com/Olsro/reddit-ipod-guides/blob/main/guides/ipod-encode-240p-video-content.md)). |
+| **Source files** | Unencrypted video files you can decode locally; see [Limitations](#limitations). |
+
+## Download & install
+
+**Latest installers:** [github.com/MMagTech/pod240/releases/latest](https://github.com/MMagTech/pod240/releases/latest)
+
+You do **not** need to install Rust, Node.js, or HandBrake for a normal release — the app bundles what it needs to encode and tag.
+
+> **Version note:** GitHub **Releases** show published installer versions. The **source tree** may bump a patch ahead of the next tagged release while development continues; trust **Releases** for “what build do I download?”
 
 ## First launch (unsigned builds)
 
-Release installers are **not** Developer ID–signed or **notarized**. **Windows** may show **SmartScreen**; choose “More info” / “Run anyway” if you trust the download. **macOS** may show **Gatekeeper** warnings (sometimes phrased like the app “can’t be opened” or is “damaged”) until you **right‑click → Open** the first time, or allow the app under **System Settings → Privacy & Security**. This is typical for hobby open-source builds distributed outside the Mac App Store.
+Release builds are **not** signed with a paid **Apple Developer ID** and are **not** **notarized**. Treat the steps below as normal for small open-source projects.
 
-## What you get in the box
+### Windows
 
-- **Encoding:** HandBrake CLI with the bundled **Olsro 240p30** preset (see [THIRD_PARTY.md](THIRD_PARTY.md) for licenses and components).
-- **Tags:** AtomicParsley is used when you add **metadata** in the app (iTunes-style tags on the finished `.mp4`).
-- **FFmpeg:** Shipped **next to the app** under **`resources/ffmpeg`** (`ffmpeg` + `ffprobe`). Pod240 uses them for **music video “Frame from video”** and preview scrubbing when the built-in player cannot decode a file—they are **not** used for the main HandBrake encode. Release installs include these binaries; if you build from source and the folder is empty, copy them in as described in **`resources/ffmpeg/README.txt`**, or set **`POD240_FFMPEG`** to that folder or to `ffmpeg` directly.
+If **Microsoft Defender SmartScreen** appears: choose **More info** → **Run anyway** (wording may vary slightly by Windows version) if you trust this repository.
 
-## Using Pod240
+### macOS
 
-1. **Add videos:** Use **Choose files** or **drag and drop** onto the window.
-2. **Metadata (optional):** When prompted, you can add **Add Metadata** (movie / TV / music video tags, optional TMDB key for posters and text) or **Skip** to encode without those tags.
-3. **Queue:** Jobs run **one at a time**. You can reorder **pending** jobs by dragging the handle on each row.
-4. **Output folder:** By default, converted files go **next to each source file**. You can set a **default output folder** in the UI so folder drops mirror their structure under that folder; single files can still follow the default or same-folder behavior depending on how you added them.
-5. **While encoding:** **Cancel** stops the current encode. **Clear queue** removes jobs that are not currently encoding. **Closing the window** (X) asks for confirmation if something is still **encoding** or **waiting** in the queue—unfinished work is lost if you confirm.
+**Gatekeeper** may block the app or show messages like the app “can’t be opened” or is “damaged” (often quarantine + unsigned code, not a corrupt download). Typical workarounds:
+
+1. **Right-click** the app (or the app inside the `.dmg`) → **Open** → confirm once, **or**
+2. **System Settings → Privacy & Security** → allow the app when macOS lists it there.
+
+## Quick start
+
+1. **Add files** — **Choose files** or drag videos (or folders) onto the window.
+2. **Metadata** — Choose **Add Metadata** or **Skip** when prompted (optional TMDB key under **Menu → TMDB API**).
+3. **Queue** — Jobs run **one at a time**; drag the handle on a row to **reorder** pending work.
+4. **Output** — By default, outputs go **next to each source**; you can set a **default output folder** in the UI for batch layouts.
+
+More detail: **Menu → Help** and **Menu → Tips**.
 
 ## Output files
 
-Converted files are **`.mp4`** in **240p** (per the Olsro preset). The app picks a filename that does not overwrite your source: usually `YourVideo.mp4` in the output folder; if that name is taken or would overwrite the source, it uses `YourVideo_ipod240p.mp4`, then `YourVideo_ipod240p_2.mp4`, and so on.
+Converted files are **`.mp4`** in **240p** (per the preset). The app avoids overwriting sources: usually `YourVideo.mp4` in the output folder; if needed, `YourVideo_ipod240p.mp4`, then `YourVideo_ipod240p_2.mp4`, and so on.
 
-## Limitations
+## Bundled tools
 
-**DRM-protected** purchases (e.g. many store-bought downloads) **cannot** be converted. Use files you own that are not copy-protected.
+- **HandBrake CLI** — Encode with the **Olsro 240p30** preset ([THIRD_PARTY.md](THIRD_PARTY.md)).
+- **AtomicParsley** — MPEG-4 metadata when you use the metadata flow.
+- **FFmpeg / ffprobe** — Shipped **with release builds** next to the app under **`resources/ffmpeg`** for music-video frame capture and scrubbing helpers; **not** used for the main HandBrake encode. Advanced layout and **`POD240_FFMPEG`**: [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Settings
 
-Preferences are stored in **`pod240-settings.json`** next to the application executable—handy for a **portable** install with no Windows Registry dependency. They include:
+Stored in **`pod240-settings.json`** next to the executable:
 
-- **Default output folder** (optional).
-- **TMDB API key** (optional; movie/TV artwork and metadata in the metadata flow).
-- **Discord notifications** (optional): an incoming **Discord webhook** URL plus toggles for **queue finished** and **encode failed**—configure under **Menu → Notification**.
+- Default **output folder** (optional).
+- Optional **TMDB API key** (posters / tags in metadata).
+- Optional **Discord webhook** URL and toggles (**Menu → Notification**).
 
-No Discord account data is stored beyond the webhook URL and those toggles; messages are sent only when you enable them and the corresponding event occurs.
+Discord stores only the webhook URL and your toggle choices; messages send only when you enable them and the event occurs.
 
-## Credits and licenses
+## Limitations
+
+> **Note — DRM:** **DRM-protected** purchases (many store-bought downloads) **cannot** be converted. Use files you own that are **not** copy-protected. If something “won’t convert,” check whether the file is encrypted for a store ecosystem first.
+
+## Troubleshooting & FAQ
+
+| Question | Short answer |
+| --- | --- |
+| **macOS says the app is “damaged”?** | Usually **Gatekeeper**, not a bad file. Try **right-click → Open**, or **Privacy & Security** as in [First launch (macOS)](#macos). |
+| **Windows SmartScreen blocks the app?** | Use **More info** / **Run anyway** if you trust the [Releases](https://github.com/MMagTech/pod240/releases/latest) download. |
+| **Encode failed?** | Open the in-app **Log**; check HandBrake errors. Missing tools show a banner — install from a **release** build or see [DEVELOPMENT.md](DEVELOPMENT.md). |
+| **Do I need a TMDB key?** | **No** for plain encodes. **Yes** if you want TMDB-driven posters/fetch in the metadata dialogs (**Menu → TMDB API**). |
+| **How do I check for a newer release?** | **Menu → Check for Updates** (contacts GitHub only when you use it). |
+
+## Credits & licenses
 
 - Preset lineage and community context: **Olsro** / [reddit-ipod-guides](https://github.com/Olsro/reddit-ipod-guides).
-- Third-party tools and attribution: **[THIRD_PARTY.md](THIRD_PARTY.md)**.
+- Third-party components: **[THIRD_PARTY.md](THIRD_PARTY.md)**.
 - Pod240 application license: **[LICENSE](LICENSE)**.
+
+## Contributing & issues
+
+Bug reports and feature ideas: **[GitHub Issues](https://github.com/MMagTech/pod240/issues)**.  
+To build from source or cut a release: **[DEVELOPMENT.md](DEVELOPMENT.md)**.
