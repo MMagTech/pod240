@@ -58,6 +58,11 @@ If **Microsoft Defender SmartScreen** appears: choose **More info** → **Run an
 
 1. **Right-click** the app (or the app inside the `.dmg`) → **Open** → confirm once, **or**
 2. **System Settings → Privacy & Security** → allow the app when macOS lists it there.
+3. If it **still** won’t launch after you’ve copied **Pod240** to **Applications**, clear the download **quarantine** flag in **Terminal** (only if you trust this build, same as above):
+
+   ```bash
+   xattr -r -d com.apple.quarantine "/Applications/Pod240.app"
+   ```
 
 ## Quick Start
 
@@ -97,6 +102,7 @@ Discord stores only the webhook URL and your toggle choices; messages send only 
 | Question | Short answer |
 | --- | --- |
 | **macOS says the app is “damaged”?** | Usually **Gatekeeper**, not a bad file. Try **right-click → Open**, or **Privacy & Security** as in [First Launch (macOS)](#macos). |
+| **Pod240 won’t open from /Applications?** | In **Terminal**: `xattr -r -d com.apple.quarantine "/Applications/Pod240.app"` — see [macOS](#macos) under **First Launch**. |
 | **Windows SmartScreen blocks the app?** | Use **More info** / **Run anyway** if you trust the [Releases](https://github.com/MMagTech/pod240/releases/latest) download. |
 | **Encode failed?** | Open the in-app **Log**; check HandBrake errors. Missing tools show a banner — install from a **release** build or see [DEVELOPMENT.md](DEVELOPMENT.md). |
 | **Do I need a TMDB key?** | **No** for plain encodes. **Yes** if you want TMDB-driven posters/fetch in the metadata dialogs (**Menu → TMDB API**). |
