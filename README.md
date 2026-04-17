@@ -9,11 +9,19 @@ Pod240 is a drag-and-drop **desktop app** (**Windows** / **macOS**) that convert
 
 **Why it exists:** getting video onto an iPod Classic in 2026 is awkward. Pod240 makes it mostly **drop, queue, encode**.
 
-![Pod240 — main window](assets/Screenshot%202026-04-17%20065712.png)
-
-![Pod240 — queue and controls](assets/Screenshot%202026-04-17%20065749.png)
-
-![Pod240 — metadata / workflow](assets/Screenshot%202026-04-17%20065856.png)
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20065712.png" alt="Pod240 — main window" width="260" />
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20065749.png" alt="Pod240 — queue and controls" width="260" />
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/Screenshot%202026-04-17%20065856.png" alt="Pod240 — metadata / workflow" width="260" />
+    </td>
+  </tr>
+</table>
 
 ## Features
 
